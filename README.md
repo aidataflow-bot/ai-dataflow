@@ -57,6 +57,8 @@ Important: `SUPABASE_SERVICE_ROLE_KEY` must only live in Vercel environment vari
 
 Vercel will serve the HTML/CSS/JS files and run `api/[...path].js` for backend routes.
 
+The Vercel build runs `npm run build`, which copies static assets into `public/`.
+
 ## Local Development
 
 Quick local fallback:

@@ -4,6 +4,7 @@
   "private": true,
   "description": "AI DataFlow production MVP",
   "scripts": {
+    "build": "rm -rf public && mkdir -p public && cp *.html public/ && cp -R css js images public/",
     "start": "node server.js",
     "dev": "node server.js",
     "smoke": "node qa-smoke.cjs"
