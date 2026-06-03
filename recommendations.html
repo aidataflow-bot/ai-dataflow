@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recommendations - AI DataFlow</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body class="dashboard-page">
+    <nav class="dashboard-nav">
+        <div class="nav-brand">
+            <div class="logo-icon">
+                <span class="logo-ai-small">AI</span>
+            </div>
+            <span class="logo-dataflow-nav">DataFlow</span>
+        </div>
+        
+        <div class="nav-links">
+            <a href="dashboard.html" class="nav-link">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="recommendations.html" class="nav-link active">
+                <i class="fas fa-lightbulb"></i> New Analysis
+            </a>
+            <a href="clients.html" class="nav-link">
+                <i class="fas fa-users"></i> Clients
+            </a>
+            <a href="history.html" class="nav-link">
+                <i class="fas fa-history"></i> History
+            </a>
+        </div>
+        
+        <div class="nav-user">
+            <div class="user-info">
+                <span id="userName">User</span>
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+    
+    <main class="dashboard-content">
+        <div class="page-header">
+            <h1><i class="fas fa-lightbulb"></i> AI-Powered Process Analysis</h1>
+            <p class="page-subtitle">Describe your business challenge to receive expert recommendations</p>
+        </div>
+        
+        <div class="recommendation-container">
+            <div class="input-section">
+                <form id="recommendationForm" class="recommendation-form">
+                    <div class="form-group">
+                        <label for="clientSelect">
+                            <i class="fas fa-user-tie"></i> Select Client (Optional)
+                        </label>
+                        <select id="clientSelect" name="clientSelect">
+                            <option value="">-- No Client (General Analysis) --</option>
+                        </select>
+                        <small style="color: var(--gray-600);">Link this analysis to a specific client for tracking</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="processArea">
+                            <i class="fas fa-folder-open"></i> Focus Area
+                        </label>
+                        <select id="processArea" name="processArea" required>
+                            <option value="">Select an area...</option>
+                            <option value="customer-service">Customer Service Operations</option>
+                            <option value="data-migration">Data Migration & Integration</option>
+                            <option value="process-optimization">Process Optimization</option>
+                            <option value="sap-systems">SAP Systems</option>
+                            <option value="automation">Business Process Automation</option>
+                            <option value="analytics">Data Analytics & BI</option>
+                            <option value="real-estate">Real Estate & Property Management</option>
+                            <option value="other">Other / General</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="processDescription">
+                            <i class="fas fa-edit"></i> Process Description
+                        </label>
+                        <textarea 
+                            id="processDescription" 
+                            name="processDescription" 
+                            rows="6"
+                            placeholder="Describe your current process, challenge, or area you'd like to improve...&#10;&#10;Example: 'We're experiencing delays in our customer order processing. Orders take 3-5 days to fulfill, and we're seeing increased customer complaints. Our team manually enters data from multiple systems into SAP.'"
+                            required
+                        ></textarea>
+                        <small class="char-count"><span id="charCount">0</span> characters</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="attachments">
+                            <i class="fas fa-paperclip"></i> Supporting Documents (Optional)
+                        </label>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <input 
+                                type="file" 
+                                id="attachments" 
+                                name="attachments" 
+                                multiple
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+                                style="display: none;"
+                            >
+                            <div class="file-upload-prompt" id="fileUploadPrompt">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p><strong>Click to upload</strong> or drag and drop</p>
+                                <small>PDF, Word, Excel, Images (Max 10MB per file)</small>
+                            </div>
+                            <div id="fileList" class="file-list"></div>
+                        </div>
+                        <small style="color: var(--gray-600); font-style: italic;">
+                            <i class="fas fa-info-circle"></i> File names and metadata are sent with the analysis request
+                        </small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="currentTools">
+                                <i class="fas fa-tools"></i> Current Tools/Systems
+                            </label>
+                            <input 
+                                type="text" 
+                                id="currentTools" 
+                                name="currentTools" 
+                                placeholder="e.g., SAP ECC, Salesforce, Excel"
+                            >
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="teamSize">
+                                <i class="fas fa-users"></i> Team Size
+                            </label>
+                            <select id="teamSize" name="teamSize">
+                                <option value="">Select...</option>
+                                <option value="1-5">1-5 people</option>
+                                <option value="6-20">6-20 people</option>
+                                <option value="21-50">21-50 people</option>
+                                <option value="51-200">51-200 people</option>
+                                <option value="200+">200+ people</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="goals">
+                            <i class="fas fa-bullseye"></i> Primary Goals
+                        </label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="reduce-costs"> Reduce Costs
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="improve-efficiency"> Improve Efficiency
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="enhance-quality"> Enhance Quality
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="scale-operations"> Scale Operations
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="improve-accuracy"> Improve Data Accuracy
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="goals" value="customer-satisfaction"> Customer Satisfaction
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="urgency">
+                            <i class="fas fa-clock"></i> Implementation Timeline
+                        </label>
+                        <select id="urgency" name="urgency">
+                            <option value="immediate">Immediate (1-3 months)</option>
+                            <option value="short-term">Short-term (3-6 months)</option>
+                            <option value="medium-term" selected>Medium-term (6-12 months)</option>
+                            <option value="long-term">Long-term (12+ months)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary btn-large" id="analyzeBtn">
+                        <i class="fas fa-magic"></i> Generate AI Recommendations
+                    </button>
+                </form>
+            </div>
+            
+            <div id="resultsSection" class="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
+                    <div class="results-actions">
+                        <button id="saveBtn" class="btn-icon" title="Save to favorites">
+                            <i class="fas fa-star"></i>
+                        </button>
+                        <button id="exportBtn" class="btn-icon" title="Export results">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button id="newAnalysisBtn" class="btn-secondary">
+                            <i class="fas fa-plus"></i> New Analysis
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="analysisResults">
+                    <!-- Results will be dynamically loaded here -->
+                </div>
+            </div>
+            
+            <div id="loadingSection" class="loading-section" style="display: none;">
+                <div class="loading-spinner">
+                    <i class="fas fa-brain fa-spin"></i>
+                </div>
+                <h3>Analyzing Your Process...</h3>
+                <p>Our AI is reviewing your information and generating personalized recommendations</p>
+            </div>
+        </div>
+    </main>
+    
+    <script src="js/auth.js"></script>
+    <script src="js/recommendations.js"></script>
+</body>
+</html>

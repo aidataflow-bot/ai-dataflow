@@ -1,0 +1,14 @@
+{
+  "name": "ai-dataflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI DataFlow production MVP",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "smoke": "node qa-smoke.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

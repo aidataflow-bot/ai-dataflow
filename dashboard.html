@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AI DataFlow</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body class="dashboard-page">
+    <nav class="dashboard-nav">
+        <div class="nav-brand">
+            <div class="logo-icon">
+                <span class="logo-ai-small">AI</span>
+            </div>
+            <span class="logo-dataflow-nav">DataFlow</span>
+        </div>
+        
+        <div class="nav-links">
+            <a href="dashboard.html" class="nav-link active">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="recommendations.html" class="nav-link">
+                <i class="fas fa-lightbulb"></i> New Analysis
+            </a>
+            <a href="clients.html" class="nav-link">
+                <i class="fas fa-users"></i> Clients
+            </a>
+            <a href="history.html" class="nav-link">
+                <i class="fas fa-history"></i> History
+            </a>
+        </div>
+
+        
+        <div class="nav-user">
+            <div class="user-info">
+                <span id="userName">User</span>
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+    
+    <main class="dashboard-content">
+        <div class="welcome-section">
+            <h1>Welcome back, <span id="welcomeName">User</span>! 👋</h1>
+            <p class="welcome-subtitle">Ready to optimize your business processes with AI-powered insights?</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-lightbulb"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalRecommendations">0</h3>
+                    <p>Total Recommendations</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="implementedCount">0</h3>
+                    <p>Implemented</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="avgImpact">-</h3>
+                    <p>Avg. Impact Score</p>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-star"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="savedCount">0</h3>
+                    <p>Saved Favorites</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="action-section">
+            <div class="action-card primary-action">
+                <div class="action-content">
+                    <i class="fas fa-rocket"></i>
+                    <h2>Get AI-Powered Recommendations</h2>
+                    <p>Describe your business challenge and receive actionable insights powered by years of enterprise expertise</p>
+                    <a href="recommendations.html" class="btn-action">
+                        <i class="fas fa-plus-circle"></i> Start New Analysis
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="recent-section" id="recentSection" style="display: none;">
+            <div class="section-header">
+                <h2><i class="fas fa-clock"></i> Recent Recommendations</h2>
+                <a href="history.html" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+            </div>
+            
+            <div id="recentList" class="recommendations-list">
+                <!-- Recent recommendations will be loaded here -->
+            </div>
+        </div>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <i class="fas fa-cogs"></i>
+                <h3>Process Optimization</h3>
+                <p>Streamline operations and reduce costs with intelligent automation recommendations</p>
+            </div>
+            
+            <div class="feature-card">
+                <i class="fas fa-database"></i>
+                <h3>Data Migration</h3>
+                <p>Expert guidance for SAP and enterprise system migrations</p>
+            </div>
+            
+            <div class="feature-card">
+                <i class="fas fa-users"></i>
+                <h3>Customer Service</h3>
+                <p>Enhance customer experience with AI-powered service optimization</p>
+            </div>
+            
+            <div class="feature-card">
+                <i class="fas fa-chart-bar"></i>
+                <h3>Analytics & BI</h3>
+                <p>Turn data into actionable insights with advanced analytics</p>
+            </div>
+        </div>
+    </main>
+    
+    <script src="js/auth.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
