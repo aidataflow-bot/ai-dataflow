@@ -788,6 +788,45 @@ a:hover {
     gap: 24px;
 }
 
+.form-help {
+    color: var(--gray-600);
+}
+
+.client-link-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.inline-client-panel {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    background: var(--gray-50);
+    padding: 20px;
+}
+
+.inline-client-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.inline-client-panel-header h3 {
+    color: var(--gray-900);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.inline-client-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
 .checkbox-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1637,6 +1676,19 @@ a:hover {
     
     .form-row {
         grid-template-columns: 1fr;
+    }
+
+    .client-link-row {
+        grid-template-columns: 1fr;
+    }
+
+    .inline-client-actions {
+        justify-content: stretch;
+    }
+
+    .inline-client-actions .btn-primary {
+        width: 100%;
+        justify-content: center;
     }
     
     .history-filters {

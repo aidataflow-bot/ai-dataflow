@@ -1,6 +1,7 @@
 // ===== AI Recommendations Engine =====
 
 let currentRecommendation = null;
+let availableClients = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication
@@ -36,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load clients for selection
     loadClientsDropdown();
+    setupQuickClientActions();
     
     // Setup result actions
     setupResultActions();
@@ -796,23 +798,32 @@ function updateUserInfo(user) {
 
 // Load clients for dropdown
 async function loadClientsDropdown() {
-    const clients = await getClients();
+    availableClients = await getClients();
+    renderClientOptions(sessionStorage.getItem('selectedClientId'));
+}
+
+function renderClientOptions(selectedClientId = '') {
     const clientSelect = document.getElementById('clientSelect');
+    const clientSelectHelp = document.getElementById('clientSelectHelp');
     
     if (!clientSelect) return;
-
-    const selectedClientId = sessionStorage.getItem('selectedClientId');
     
-    if (clients.length === 0) {
-        clientSelect.closest('.form-group').style.display = 'none';
+    clientSelect.innerHTML = '<option value="">No Client (General Analysis)</option>';
+
+    if (availableClients.length === 0) {
+        if (clientSelectHelp) {
+            clientSelectHelp.textContent = 'No clients yet. Add one here or continue with a general analysis.';
+        }
         sessionStorage.removeItem('selectedClientId');
         return;
     }
+
+    if (clientSelectHelp) {
+        clientSelectHelp.textContent = 'Link this analysis to a specific client for tracking';
+    }
     
-    // Sort clients by company name
-    const sorted = clients.sort((a, b) => a.company_name.localeCompare(b.company_name));
+    const sorted = [...availableClients].sort((a, b) => a.company_name.localeCompare(b.company_name));
     
-    // Add clients to dropdown
     sorted.forEach(client => {
         const option = document.createElement('option');
         option.value = client.id;
@@ -829,6 +840,85 @@ async function loadClientsDropdown() {
 async function getClients() {
     const { clients } = await apiRequest('/api/clients');
     return clients;
+}
+
+async function createClient(client) {
+    const { client: savedClient } = await apiRequest('/api/clients', {
+        method: 'POST',
+        body: JSON.stringify(client)
+    });
+    return savedClient;
+}
+
+function setupQuickClientActions() {
+    document.getElementById('showQuickClientBtn')?.addEventListener('click', () => {
+        document.getElementById('quickClientPanel').style.display = 'block';
+        document.getElementById('quickCompanyName')?.focus();
+    });
+
+    document.getElementById('cancelQuickClientBtn')?.addEventListener('click', closeQuickClientPanel);
+    document.getElementById('saveQuickClientBtn')?.addEventListener('click', saveQuickClient);
+}
+
+function closeQuickClientPanel() {
+    const panel = document.getElementById('quickClientPanel');
+    if (panel) panel.style.display = 'none';
+    clearQuickClientFields();
+}
+
+function clearQuickClientFields() {
+    [
+        'quickCompanyName',
+        'quickContactName',
+        'quickEmail',
+        'quickPhone',
+        'quickIndustry',
+        'quickCompanySize',
+        'quickNotes'
+    ].forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.value = '';
+    });
+}
+
+async function saveQuickClient() {
+    const saveBtn = document.getElementById('saveQuickClientBtn');
+    const clientData = {
+        company_name: document.getElementById('quickCompanyName').value.trim(),
+        contact_name: document.getElementById('quickContactName').value.trim(),
+        email: document.getElementById('quickEmail').value.trim(),
+        phone: document.getElementById('quickPhone').value.trim(),
+        industry: document.getElementById('quickIndustry').value,
+        company_size: document.getElementById('quickCompanySize').value,
+        location: '',
+        status: 'active',
+        notes: document.getElementById('quickNotes').value.trim()
+    };
+
+    if (!clientData.company_name || !clientData.contact_name || !clientData.email || !clientData.industry) {
+        showNotification('Please complete company, contact, email, and industry for the client', 'error');
+        return;
+    }
+
+    try {
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+
+        const savedClient = await createClient(clientData);
+        availableClients.push(savedClient);
+        renderClientOptions(savedClient.id);
+        closeQuickClientPanel();
+        showNotification('Client added and linked to this analysis', 'success');
+    } catch (error) {
+        showNotification(error.message, 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Save and Select Client';
+        }
+    }
 }
 
 function extractNameFromEmail(email) {
