@@ -81,6 +81,23 @@
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
+    // Light, deterministic tidy-up for text that has no AI-polished version (older analyses):
+    // trim, collapse spaces, capitalise the first letter and end with a full stop.
+    function tidySentence(value) {
+        let text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        text = text.charAt(0).toUpperCase() + text.slice(1);
+        return /[.!?]$/.test(text) ? text : text + '.';
+    }
+
+    function formatPhone(value) {
+        const raw = String(value || '').trim();
+        const digits = raw.replace(/\D/g, '');
+        if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+        if (digits.length === 11 && digits[0] === '1') return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+        return raw;
+    }
+
     // Plain-language summary used when an analysis has no AI-written executive summary
     // (analyses created before that field existed). Built only from stored facts.
     function fallbackSummary(rec, client, recommendations) {
@@ -276,7 +293,7 @@
             if (business) profileRows.push(['Business', business]);
             if (client.contact_name) profileRows.push(['Primary contact', client.contact_name]);
             if (client.email) profileRows.push(['Email', client.email]);
-            if (client.phone) profileRows.push(['Phone', client.phone]);
+            if (client.phone) profileRows.push(['Phone', formatPhone(client.phone)]);
         }
 
         const scopeRows = [['Focus area', AREAS[rec.processArea] || rec.processArea || 'General']];
@@ -307,10 +324,11 @@
         }
 
         // ----- Situation as described -----
-        const description = String(rec.description || '').trim();
-        if (description) {
-            heading('Challenge as described', 40);
-            paragraph(description, { gap: 12 });
+        // The AI's polished restatement is preferred; older analyses fall back to the typed text, lightly tidied.
+        const challenge = String(summary.challengeSummary || '').trim() || tidySentence(rec.description);
+        if (challenge) {
+            heading('Business challenge', 40);
+            paragraph(challenge, { gap: 12 });
         }
 
         // ----- Recommendations at a glance -----

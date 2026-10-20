@@ -241,9 +241,10 @@ function buildAnalysisPrompt(formData, client) {
   const lines = [
     'Create 3 to 5 prioritized process-optimization recommendations, most important first.',
     'Keep each description to 2-3 sentences and give at most 4 concrete actions per recommendation.',
+    'challengeSummary restates the process description for the client report in 1 to 3 sentences of clear, grammatically correct business English, in the third person about the client company (use "the client" if no company is given). Keep the original meaning and intent but do not copy the wording. The description was typed quickly, so fix grammar, missing words and slips; when a phrase contradicts the rest of the text or looks like a missing word (for example "why listings are moving" in a text about a sales problem), choose the most plausible business meaning. Do not add facts, numbers or tools that were not provided, and never mention that it was rewritten.',
     'executiveSummary is the opening paragraph of a report the client\'s owner will read: 3 to 4 sentences, professional and neutral. Name the company when one is given, restate the challenge in plain business language (never "he", "she" or shorthand copied from the notes), state the most important finding, and say which recommendation to act on first.',
     'Return JSON in exactly this shape:',
-    '{"summary":{"executiveSummary":"string","totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
+    '{"summary":{"executiveSummary":"string","challengeSummary":"string","totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
     ''
   ];
 
@@ -318,6 +319,7 @@ function normalizeResults(raw) {
   return {
     summary: {
       executiveSummary: String((raw.summary && raw.summary.executiveSummary) || raw.executiveSummary || '').trim().slice(0, 1500),
+      challengeSummary: String((raw.summary && raw.summary.challengeSummary) || raw.challengeSummary || '').trim().slice(0, 1200),
       totalRecommendations: recommendations.length,
       estimatedImpact: average.toFixed(1),
       implementationTime: String((raw.summary && raw.summary.implementationTime) || ''),
