@@ -105,3 +105,9 @@ This is now a real app foundation, not a static demo. Before selling it to many 
 - database backups
 - role-based access if you add team accounts
 - file upload storage using Supabase Storage
+
+## Operations Notes
+
+- **Supabase free tier pauses** the database after ~7 days without traffic. The first request after a pause fails until the project is restored from the Supabase dashboard. Unpause before any client demo.
+- **No automatic backups** on the free tier. Export data (Table Editor > Export CSV) before any schema change.
+- All `/api/*` traffic is served by `api/index.js` via the rewrite in `vercel.json` (60s max duration for AI analysis calls).
