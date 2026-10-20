@@ -57,8 +57,11 @@
             <b>Sales</b> creates clients, sets appointments, edits customer info and hands clients to a consultant; sees every analysis, price and ROI but cannot change them.
             <b>Consultant</b> runs and edits analyses and pricing and manages clients.
             <b>Admin</b> does everything a consultant does, plus this page.<br>
-            <strong>Adding someone.</strong> Give them the agency invite code (the <code>AGENCY_INVITE_CODE</code> value in Vercel). They create their own account at the sign-up page and start as <b>Sales</b>. Come back here to change their role. Deactivating someone locks them out immediately and keeps their history.
+            <strong>Adding someone.</strong> Give them the agency invite code (the <code>AGENCY_INVITE_CODE</code> value in Vercel). They create their own account at the sign-up page and start as <b>Sales</b>. Come back here to change their role. Deactivating someone locks them out immediately and keeps their history.<br>
+            <strong>Forgotten password.</strong> Click <b>Reset password</b> next to their name. You get a one-time temporary password to pass on to them privately; they are signed out everywhere and choose a new password from their Account page.
         </div>
+
+        <div class="reset-notice" id="resetNotice" hidden></div>
 
         <div class="team-card">
             <table class="team-table">

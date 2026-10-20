@@ -54,7 +54,10 @@ function renderMembers() {
                 </td>
                 <td>
                     ${member.active ? '<span class="client-status-badge active">Active</span>' : '<span class="client-status-badge inactive">Deactivated</span>'}
-                    ${isMe ? '' : `<button class="btn-secondary btn-small team-toggle" data-id="${escapeHtml(member.id)}" data-active="${member.active ? '0' : '1'}" style="margin-left: 8px;">${member.active ? 'Deactivate' : 'Reactivate'}</button>`}
+                    ${isMe ? '' : `<div class="team-actions">
+                        <button class="btn-secondary btn-small team-toggle" data-id="${escapeHtml(member.id)}" data-active="${member.active ? '0' : '1'}">${member.active ? 'Deactivate' : 'Reactivate'}</button>
+                        <button class="btn-secondary btn-small team-reset" data-id="${escapeHtml(member.id)}">Reset password</button>
+                    </div>`}
                 </td>
                 <td>${member.createdAt ? escapeHtml(new Date(member.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })) : ''}</td>
             </tr>`;
@@ -70,6 +73,59 @@ function renderMembers() {
             if (!activate && !confirm(`Deactivate ${member ? member.name : 'this person'}? They are signed out immediately and cannot log in until you reactivate them.`)) return;
             updateMember(button.dataset.id, { active: activate }, button);
         });
+    });
+    body.querySelectorAll('.team-reset').forEach(button => {
+        button.addEventListener('click', () => resetPassword(button.dataset.id, button));
+    });
+}
+
+// Admin sets a one-time temporary password. It is shown once, in the page only (never logged
+// or stored), and the person is signed out everywhere until they use it.
+async function resetPassword(id, button) {
+    const member = teamMembers.find(m => m.id === id);
+    const name = member ? member.name : 'this person';
+    if (!confirm(`Reset the password for ${name}? They are signed out everywhere and must sign in with a temporary password that you will see once.`)) return;
+
+    button.disabled = true;
+    try {
+        const result = await apiRequest(`/api/team/${encodeURIComponent(id)}/reset-password`, { method: 'POST' });
+        showResetNotice(result.member.name, result.temporaryPassword);
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+    button.disabled = false;
+}
+
+function showResetNotice(name, temporaryPassword) {
+    const box = document.getElementById('resetNotice');
+    box.innerHTML = `
+        <div class="reset-title"><i class="fas fa-key"></i> Temporary password for <strong>${escapeHtml(name)}</strong> &mdash; shown once</div>
+        <div class="reset-code" id="resetCode"></div>
+        <div class="reset-actions">
+            <button type="button" class="btn-secondary btn-small" id="copyReset"><i class="fas fa-copy"></i> Copy</button>
+            <button type="button" class="btn-secondary btn-small" id="dismissReset">Done, I have copied it</button>
+        </div>
+        <p class="reset-help">Send it to ${escapeHtml(name)} privately. They sign in at the login page with this password, then open <b>Account</b> (click their name at the top right) and choose a new password. Once you click Done it cannot be shown again; reset again if you lose it.</p>`;
+    document.getElementById('resetCode').textContent = temporaryPassword;
+    box.hidden = false;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    document.getElementById('copyReset').addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(temporaryPassword);
+            showNotification('Copied to clipboard', 'success');
+        } catch (error) {
+            const range = document.createRange();
+            range.selectNodeContents(document.getElementById('resetCode'));
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            showNotification('Press Ctrl+C (or Cmd+C) to copy the selected password', 'info');
+        }
+    });
+    document.getElementById('dismissReset').addEventListener('click', () => {
+        box.hidden = true;
+        box.innerHTML = '';
     });
 }
 

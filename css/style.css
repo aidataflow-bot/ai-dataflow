@@ -2021,3 +2021,24 @@ a.nav-brand {
 }
 .filter-group input[type="text"]:focus { outline: none; border-color: var(--primary-red); }
 .team-table td:nth-child(3) { white-space: nowrap; }
+
+/* Account page, password reset */
+.user-info.is-link { cursor: pointer; border-radius: var(--border-radius); padding: 4px 8px; margin: -4px -8px; }
+.user-info.is-link:hover, .user-info.is-link:focus-visible { background: var(--gray-100); outline: none; }
+.account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; align-items: start; }
+.account-card { background: white; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); padding: 24px; }
+.account-heading { font-size: 18px; margin: 0 0 16px; color: var(--gray-900); }
+.account-facts { display: grid; grid-template-columns: 80px 1fr; gap: 10px 12px; margin: 0 0 16px; }
+.account-facts dt { color: var(--gray-500); font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px; }
+.account-facts dd { margin: 0; color: var(--gray-900); font-weight: 600; word-break: break-word; }
+.account-help { color: var(--gray-500); font-size: 13px; line-height: 1.5; margin: 12px 0 0; }
+.account-form .btn-primary { width: auto; padding-left: 24px; padding-right: 24px; }
+.reset-notice { background: #fff8e6; border: 2px solid #f0c24b; border-radius: var(--border-radius-lg); padding: 18px 22px; margin-bottom: 24px; }
+.reset-title { color: var(--gray-900); margin-bottom: 10px; }
+.reset-title i { color: #b7791f; margin-right: 6px; }
+.reset-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 26px; font-weight: 700; letter-spacing: 0.08em; background: white; border: 1px dashed var(--gray-400); border-radius: var(--border-radius); padding: 12px 16px; display: inline-block; user-select: all; }
+.reset-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px; }
+.reset-help { color: var(--gray-700); font-size: 13px; line-height: 1.5; margin: 0; }
+.team-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.account-form .form-group { margin-bottom: 20px; }
+.account-form .form-help { display: block; margin-top: 6px; }

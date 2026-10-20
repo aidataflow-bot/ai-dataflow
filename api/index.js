@@ -68,9 +68,16 @@ function sign(value) {
   return crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('base64url');
 }
 
-function createToken(userId) {
+// A login token is tied to the password it was issued under. Changing or resetting a password
+// therefore signs that person out everywhere else, with no extra database column.
+function passwordStamp(passwordHash) {
+  return sign(`pw:${String(passwordHash || '')}`).slice(0, 22);
+}
+
+function createToken(userId, passwordHash) {
   const payload = base64Url(JSON.stringify({
     sub: userId,
+    pw: passwordStamp(passwordHash),
     exp: Date.now() + 1000 * 60 * 60 * 24 * 7
   }));
   return `${payload}.${sign(payload)}`;
@@ -79,15 +86,25 @@ function createToken(userId) {
 function verifyToken(token) {
   if (!token || !token.includes('.')) return null;
   const [payload, signature] = token.split('.');
-  if (signature !== sign(payload)) return null;
+  if (!safeEqual(signature, sign(payload))) return null;
 
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!parsed.sub || Date.now() > parsed.exp) return null;
-    return parsed.sub;
+    return { userId: parsed.sub, stamp: String(parsed.pw || '') };
   } catch {
     return null;
   }
+}
+
+// Temporary passwords avoid look-alike characters (0/O, 1/I) so they survive being read aloud
+// or typed from a message. 12 characters from a 32-letter alphabet is 60 bits of randomness;
+// 256 is divisible by 32, so mapping random bytes onto the alphabet has no bias.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function generateTemporaryPassword() {
+  const chars = Array.from(crypto.randomBytes(12), byte => TEMP_PASSWORD_ALPHABET[byte % 32]);
+  return [0, 4, 8].map(start => chars.slice(start, start + 4).join('')).join('-');
 }
 
 function assertSupabaseEnv() {
@@ -344,16 +361,22 @@ async function getUserById(userId) {
 async function requireUser(req, res) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const userId = verifyToken(token);
+  const session = verifyToken(token);
 
-  if (!userId) {
+  if (!session) {
     sendError(res, 401, 'Authentication required');
     return null;
   }
 
-  const user = await getUserById(userId);
+  const user = await getUserById(session.userId);
   if (!user) {
     sendError(res, 401, 'Authentication required');
+    return null;
+  }
+
+  // The token must match the account's current password (see passwordStamp).
+  if (!safeEqual(session.stamp, passwordStamp(user.password_hash))) {
+    sendError(res, 401, 'Your session has ended. Please sign in again.');
     return null;
   }
 
@@ -637,7 +660,7 @@ module.exports = async function handler(req, res) {
         query: '?select=*',
         body: row
       });
-      send(res, 201, { user: rowToUser(created), token: createToken(created.id) });
+      send(res, 201, { user: rowToUser(created), token: createToken(created.id, row.password_hash) });
       return;
     }
 
@@ -659,7 +682,7 @@ module.exports = async function handler(req, res) {
         return;
       }
 
-      send(res, 200, { user: rowToUser(user), token: createToken(user.id) });
+      send(res, 200, { user: rowToUser(user), token: createToken(user.id, user.password_hash) });
       return;
     }
 
@@ -668,6 +691,72 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'GET' && pathname === '/api/me') {
       send(res, 200, { user: rowToUser(user) });
+      return;
+    }
+
+    // Change your own password. Wrong-current-password is a 400, not a 401, because a 401
+    // makes the browser sign you out. Every other session is ended; this one gets a new token.
+    if (req.method === 'POST' && pathname === '/api/me/password') {
+      const body = await getBody(req);
+      const currentPassword = String(body.currentPassword || '');
+      const newPassword = String(body.newPassword || '');
+
+      if (!verifyPassword(currentPassword, user.password_hash)) {
+        sendError(res, 400, 'Your current password is not correct');
+        return;
+      }
+      if (newPassword.length < 8) {
+        sendError(res, 400, 'The new password must be at least 8 characters');
+        return;
+      }
+      if (newPassword.length > 200) {
+        sendError(res, 400, 'The new password is too long');
+        return;
+      }
+      if (safeEqual(newPassword, currentPassword)) {
+        sendError(res, 400, 'The new password must be different from the current one');
+        return;
+      }
+
+      const passwordHash = hashPassword(newPassword);
+      await supabaseRequest('app_users', {
+        method: 'PATCH',
+        query: `?id=eq.${encodeURIComponent(user.id)}`,
+        body: { password_hash: passwordHash }
+      });
+      send(res, 200, { ok: true, token: createToken(user.id, passwordHash) });
+      return;
+    }
+
+    // Admin: set a one-time temporary password for a teammate who is locked out. The app sends
+    // no email, so the admin passes it on personally. The password is returned once, never stored
+    // in readable form, and the person is signed out everywhere.
+    const resetMatch = pathname.match(/^\/api\/team\/([^/]+)\/reset-password$/);
+    if (resetMatch && req.method === 'POST') {
+      if (roleOf(user) !== 'admin') {
+        sendError(res, 403, 'Only an admin can reset a password');
+        return;
+      }
+      const memberId = decodeURIComponent(resetMatch[1]);
+      if (memberId === user.id) {
+        sendError(res, 400, 'Use Change password on your Account page for your own password');
+        return;
+      }
+      const staff = await loadStaff();
+      const target = staff.get(memberId);
+      if (!target) {
+        sendError(res, 404, 'Team member not found');
+        return;
+      }
+
+      const temporaryPassword = generateTemporaryPassword();
+      await supabaseRequest('app_users', {
+        method: 'PATCH',
+        query: `?id=eq.${encodeURIComponent(memberId)}`,
+        body: { password_hash: hashPassword(temporaryPassword) }
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      send(res, 200, { temporaryPassword, member: { id: target.id, name: target.name, email: target.email } });
       return;
     }
 

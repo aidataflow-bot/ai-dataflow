@@ -29,6 +29,25 @@ document.addEventListener('DOMContentLoaded', function() {
     if (registerForm) {
         registerForm.addEventListener('submit', handleRegister);
     }
+
+    // Clicking your name in the top bar opens your Account page (change password).
+    document.querySelectorAll('.user-info').forEach(el => {
+        const open = () => { window.location.href = 'account.html'; };
+        el.classList.add('is-link');
+        el.setAttribute('role', 'link');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('title', 'Your account and password');
+        el.addEventListener('click', open);
+        el.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+        });
+    });
+
+    // There is no email reset: staff ask an admin, who resets it from the Team page.
+    document.querySelector('.forgot-link')?.addEventListener('click', event => {
+        event.preventDefault();
+        showNotification('Ask your agency admin to reset your password. They can do it from the Team page.', 'info');
+    });
 });
 
 async function apiRequest(path, options = {}) {

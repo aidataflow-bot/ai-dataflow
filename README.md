@@ -78,7 +78,8 @@ The agency has **one shared workspace**: every staff member sees the same client
 | Download the client PDF | yes | yes | yes |
 | Run, edit or delete analyses and their pricing | no | yes | yes |
 | Delete a client | no | yes | yes |
-| Clear all history, manage the team | no | no | yes |
+| Clear all history, manage the team, reset a teammate's password | no | no | yes |
+| Change your own password (Account page) | yes | yes | yes |
 
 - New sign-ups start as **Sales**. An admin changes their role (or deactivates them) on the **Team** page. A deactivated person is locked out on their next click even if they are still logged in, and their history stays.
 - Intended flow: Sales creates the client, books the appointment and assigns a consultant; the consultant meets the client, runs the analysis and moves the stage forward; everyone follows progress on the client page and the dashboard.
@@ -86,6 +87,13 @@ The agency has **one shared workspace**: every staff member sees the same client
 - Appointments are stored as an exact moment and shown in each viewer's own time zone. There is no calendar sync yet.
 - `clients.user_id` and `recommendations.user_id` mean "created by". Users who own records cannot be deleted (deactivate them instead).
 - A user whose role is missing or unknown is treated as Sales (least privilege).
+
+### Passwords
+
+- The app sends no email, so there is no emailed reset link. A teammate who forgot their password asks an admin, who clicks **Reset password** on the **Team** page. The admin sees a one-time temporary password (shown once, never stored in readable form) and passes it on privately. The person signs in with it and picks their own password on the **Account** page (click your name in the top bar).
+- A login token is tied to the password it was issued under, so **changing or resetting a password signs that person out on every other device**. An admin cannot reset their own password; use Account > Change password.
+- Deploying this change signs everyone out once (older tokens carry no password stamp). They just sign in again.
+- There is no email change: the email is the login. Resets and changes need no database migration.
 
 ## Deploy
 
@@ -130,7 +138,8 @@ ai-dataflow/
 ├── client-detail.html
 ├── recommendations.html
 ├── history.html
-├── team.html                  # Admin: roles and active/deactivated staff
+├── team.html                  # Admin: roles, active/deactivated staff, password reset
+├── account.html               # Your details and Change password
 ├── css/style.css
 ├── images/
 │   ├── logo.png               # Full logo (source)
@@ -139,6 +148,7 @@ ai-dataflow/
 └── js/
     ├── workspace.js           # Pipeline stages, appointments, team helpers
     ├── team.js                # Team page
+    ├── account.js             # Account page (change your own password)
     ├── pdf-report.js          # Client-ready PDF report builder
     └── vendor/jspdf.umd.min.js  # jsPDF 4.2.1 (vendored)
 ```
@@ -147,8 +157,8 @@ ai-dataflow/
 
 This is now a real app foundation, not a static demo. Before selling it to many customers, add:
 
-- password reset
-- email verification
+- emailed password reset / email verification (today: admin-issued temporary passwords, no email at all)
+- login rate limiting (nothing slows repeated wrong-password attempts except the hashing cost)
 - custom domain
 - database backups
 - a client-facing portal (analysis, project progress, payment balance)

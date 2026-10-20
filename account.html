@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account - AI DataFlow</title>
+    <link rel="icon" type="image/png" href="images/favicon.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body class="dashboard-page">
+    <nav class="dashboard-nav">
+        <a href="dashboard.html" class="nav-brand" aria-label="AI.DataFlow dashboard">
+            <img src="images/logo-horizontal.png" alt="AI.DataFlow" class="nav-logo">
+        </a>
+
+        <div class="nav-links">
+            <a href="dashboard.html" class="nav-link">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="recommendations.html" class="nav-link" data-roles="admin,consultant" hidden>
+                <i class="fas fa-lightbulb"></i> New Analysis
+            </a>
+            <a href="clients.html" class="nav-link">
+                <i class="fas fa-users"></i> Clients
+            </a>
+            <a href="history.html" class="nav-link">
+                <i class="fas fa-history"></i> History
+            </a>
+            <a href="team.html" class="nav-link" data-roles="admin" hidden>
+                <i class="fas fa-user-shield"></i> Team
+            </a>
+        </div>
+
+        <div class="nav-user">
+            <div class="user-info">
+                <span id="userName">User</span>
+                <span class="role-chip" id="roleChip"></span>
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <main class="dashboard-content">
+        <div class="page-header">
+            <div>
+                <h1><i class="fas fa-user-circle"></i> Account</h1>
+                <p class="page-subtitle">Your sign-in details and password</p>
+            </div>
+        </div>
+
+        <div class="account-grid">
+            <section class="account-card">
+                <h2 class="account-heading">You</h2>
+                <dl class="account-facts">
+                    <dt>Name</dt><dd id="accName"></dd>
+                    <dt>Email</dt><dd id="accEmail"></dd>
+                    <dt>Role</dt><dd><span class="role-chip" id="accRole"></span></dd>
+                </dl>
+                <p class="account-help">Your email is your login and cannot be changed here. Ask an admin if it needs to change.</p>
+            </section>
+
+            <section class="account-card">
+                <h2 class="account-heading">Change password</h2>
+                <form id="passwordForm" class="account-form" autocomplete="off">
+                    <div class="form-group">
+                        <label for="currentPassword">Current password</label>
+                        <input type="password" id="currentPassword" autocomplete="current-password" required>
+                        <small class="form-help">If an admin just gave you a temporary password, type it here.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New password</label>
+                        <input type="password" id="newPassword" autocomplete="new-password" minlength="8" required>
+                        <small class="form-help">At least 8 characters.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm new password</label>
+                        <input type="password" id="confirmPassword" autocomplete="new-password" minlength="8" required>
+                    </div>
+                    <button type="submit" class="btn-primary" id="passwordSubmit">
+                        <i class="fas fa-key"></i> Change password
+                    </button>
+                    <p class="account-help">Changing your password signs you out on every other device or browser.</p>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <script src="js/auth.js"></script>
+    <script src="js/workspace.js"></script>
+    <script src="js/account.js"></script>
+</body>
+</html>
