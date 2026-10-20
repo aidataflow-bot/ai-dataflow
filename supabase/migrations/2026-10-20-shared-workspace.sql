@@ -39,11 +39,24 @@ create index if not exists clients_appointment_at_idx on public.clients(appointm
 -- 3) Shared data must not disappear when a staff account is removed --------------------------
 -- user_id now means "created by". Deleting a user must be blocked while they own records
 -- (deactivate people from the Team page instead of deleting them).
-alter table public.clients drop constraint if exists clients_user_id_fkey;
+-- (Looks the old constraints up by column, so it works whatever name they were given.)
+do $$
+declare c record;
+begin
+  for c in
+    select con.conrelid::regclass as tbl, con.conname
+    from pg_constraint con
+    join pg_attribute a on a.attrelid = con.conrelid and a.attnum = any (con.conkey)
+    where con.contype = 'f'
+      and con.conrelid in ('public.clients'::regclass, 'public.recommendations'::regclass)
+      and a.attname = 'user_id'
+  loop
+    execute format('alter table %s drop constraint %I', c.tbl, c.conname);
+  end loop;
+end $$;
+
 alter table public.clients
   add constraint clients_user_id_fkey foreign key (user_id) references public.app_users(id) on delete restrict;
-
-alter table public.recommendations drop constraint if exists recommendations_user_id_fkey;
 alter table public.recommendations
   add constraint recommendations_user_id_fkey foreign key (user_id) references public.app_users(id) on delete restrict;
 

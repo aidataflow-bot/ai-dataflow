@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         logoutBtn.addEventListener('click', handleLogout);
     }
     
+    // The role decides what is editable here (sales can read everything, change nothing).
+    await window.userReady;
+    
     // Load recommendations
     await loadHistory(user);
     
@@ -65,6 +68,7 @@ function renderHistory() {
     
     historyList.style.display = 'flex';
     emptyState.style.display = 'none';
+    const canManage = isConsultantUser(getCurrentUser());
     
     // Sort by date (newest first)
     const sorted = [...filteredRecommendations].sort((a, b) => 
@@ -98,15 +102,15 @@ function renderHistory() {
                     </div>
                 </div>
                 <div class="history-actions">
-                    <button class="btn-icon toggle-favorite" data-id="${rec.id}" title="${rec.isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
+                    ${canManage ? `<button class="btn-icon toggle-favorite" data-id="${rec.id}" title="${rec.isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
                         <i class="fas fa-star"></i>
-                    </button>
+                    </button>` : ''}
                     <button class="btn-icon view-details" data-id="${rec.id}" title="View details">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn-icon delete-item" data-id="${rec.id}" title="Delete">
+                    ${canManage ? `<button class="btn-icon delete-item" data-id="${rec.id}" title="Delete">
                         <i class="fas fa-trash"></i>
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
             
@@ -121,11 +125,11 @@ function renderHistory() {
                     <span class="status-badge ${rec.status}">
                         ${formatStatus(rec.status)}
                     </span>
-                    <select class="status-select" data-id="${rec.id}" style="padding: 6px 12px; border: 2px solid var(--gray-200); border-radius: 6px; font-size: 14px;">
+                    ${canManage ? `<select class="status-select" data-id="${rec.id}" style="padding: 6px 12px; border: 2px solid var(--gray-200); border-radius: 6px; font-size: 14px;">
                         <option value="not-started" ${rec.status === 'not-started' ? 'selected' : ''}>Not Started</option>
                         <option value="in-progress" ${rec.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
                         <option value="completed" ${rec.status === 'completed' ? 'selected' : ''}>Completed</option>
-                    </select>
+                    </select>` : ''}
                 </div>
                 <button class="btn-secondary view-full" data-id="${rec.id}">
                     <i class="fas fa-external-link-alt"></i> View Full Analysis
@@ -297,14 +301,17 @@ function viewDetails(id) {
         </option>
     `).join('');
 
+    const canManage = isConsultantUser(getCurrentUser());
+    const linkedClientName = clientNameFor(rec.clientId);
+
     modalBody.innerHTML = `
         <div style="margin-bottom: 24px; padding: 12px 16px; background: var(--gray-50, #f9fafb); border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
             <label for="modalClientSelect" style="font-weight: 600;"><i class="fas fa-user-tie"></i> Client</label>
-            <select id="modalClientSelect" style="padding: 8px 12px; border: 2px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: 14px; min-width: 220px;">
+            ${canManage ? `<select id="modalClientSelect" style="padding: 8px 12px; border: 2px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: 14px; min-width: 220px;">
                 <option value="">No client (general analysis)</option>
                 ${clientOptions}
-            </select>
-            ${allClients.length === 0 ? '<small>No clients yet. <a href="clients.html">Add one</a> to link this analysis.</small>' : ''}
+            </select>` : `<span>${linkedClientName ? escapeHtml(linkedClientName) : '<em>No client</em>'}</span>`}
+            ${canManage && allClients.length === 0 ? '<small>No clients yet. <a href="clients.html">Add one</a> to link this analysis.</small>' : ''}
             ${rec.results.meta && rec.results.meta.model ? `<small style="margin-left: auto; color: var(--gray-600);"><i class="fas fa-robot"></i> ${escapeHtml(formatModelLabel(rec.results.meta))}</small>` : ''}
         </div>
 
@@ -402,6 +409,7 @@ function viewDetails(id) {
 
     // Link / re-link / unlink the analysis to a client
     const clientSelect = document.getElementById('modalClientSelect');
+    if (!clientSelect) return; // read-only view for sales
     clientSelect.onchange = async () => {
         const previous = rec.clientId || '';
         clientSelect.disabled = true;

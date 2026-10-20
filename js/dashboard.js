@@ -8,6 +8,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Update user info in navigation
     updateUserInfo(user);
     
+    // The role decides what the dashboard emphasises.
+    const freshUser = (await window.userReady) || user;
+    
+    // Appointments and clients to follow up (shared across the agency)
+    await loadWorkspace(freshUser);
+    
     // Load dashboard statistics
     await loadDashboardStats(user);
     
@@ -166,4 +172,62 @@ function formatStatus(status) {
 function truncateText(text, maxLength) {
     if (text.length <= maxLength) return text;
     return text.substr(0, maxLength) + '...';
+}
+
+
+// ===== Shared workspace: appointments and who needs attention =====
+async function loadWorkspace(user) {
+    const grid = document.getElementById('workspaceGrid');
+    let clients = [];
+    try {
+        ({ clients } = await apiRequest('/api/clients'));
+    } catch (error) {
+        return;
+    }
+    if (!clients.length) return;
+    grid.style.display = 'grid';
+
+    const isOpen = c => c.stage !== 'won' && c.stage !== 'lost';
+
+    // Upcoming appointments for everyone, soonest first.
+    const upcoming = clients
+        .filter(c => c.appointment_at && isUpcoming(c.appointment_at) && isOpen(c))
+        .sort((a, b) => new Date(a.appointment_at) - new Date(b.appointment_at))
+        .slice(0, 6);
+    document.getElementById('appointmentsList').innerHTML = upcoming.length
+        ? upcoming.map(c => agendaItem(c, formatDateTime(c.appointment_at),
+            `${c.assigned_to ? 'With ' + (c.assigned_to_name || 'Former team member') : 'No consultant yet'}${c.appointment_notes ? ' · ' + c.appointment_notes : ''}`)).join('')
+        : '<p class="agenda-empty">No upcoming appointments. Set one on a client to see it here.</p>';
+
+    // Second card: consultants see their own clients first; sales see who still needs a consultant.
+    const role = userRole(user);
+    const focusTitle = document.getElementById('focusTitle');
+    let focus;
+    if (role === 'sales') {
+        focusTitle.innerHTML = '<i class="fas fa-user-clock"></i> Waiting for a consultant';
+        focus = clients.filter(c => !c.assigned_to && isOpen(c));
+    } else {
+        focusTitle.innerHTML = '<i class="fas fa-user-tie"></i> My clients';
+        focus = clients.filter(c => c.assigned_to === user.id && isOpen(c));
+    }
+    focus = focus.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)).slice(0, 6);
+    document.getElementById('focusList').innerHTML = focus.length
+        ? focus.map(c => agendaItem(c, stageLabel(c.stage),
+            role === 'sales' ? `Added by ${c.created_by_name || 'Former team member'}` : (c.appointment_at ? 'Appointment ' + formatDateTime(c.appointment_at) : 'No appointment yet'))).join('')
+        : `<p class="agenda-empty">${role === 'sales' ? 'Every open client has a consultant.' : 'No clients assigned to you yet.'}</p>`;
+
+    if (role === 'sales') {
+        document.getElementById('welcomeSubtitle').textContent = 'Create clients, set appointments and hand them to a consultant. You can follow every client from here.';
+    }
+}
+
+function agendaItem(client, right, sub) {
+    return `
+        <a class="agenda-item" href="client-detail.html?id=${encodeURIComponent(client.id)}">
+            <div>
+                <div class="agenda-title">${escapeHtml(client.company_name)}</div>
+                <div class="agenda-sub">${escapeHtml(client.contact_name)} &middot; ${escapeHtml(sub)}</div>
+            </div>
+            <div class="agenda-when">${escapeHtml(right)}</div>
+        </a>`;
 }

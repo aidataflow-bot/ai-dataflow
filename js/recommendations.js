@@ -3,6 +3,14 @@
 let currentRecommendation = null;
 let availableClients = [];
 
+// Sales can read every analysis but only consultants and admins run them (the server enforces this too).
+window.userReady.then(user => {
+    if (user && !isConsultantUser(user)) {
+        showNotification('Analyses are run by consultants. You can read them in History.', 'info');
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication
     const user = checkAuth();

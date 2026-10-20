@@ -4,10 +4,11 @@ let allClients = [];
 let filteredClients = [];
 let allRecommendations = [];
 let editingClientId = null;
+let consultants = [];
 
 document.addEventListener('DOMContentLoaded', async function() {
     // Check authentication
-    const user = checkAuth();
+    let user = checkAuth();
     if (!user) return;
     
     // Update user info
@@ -17,6 +18,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
+    }
+    
+    // The role decides what the cards show (e.g. only consultants can delete).
+    user = (await window.userReady) || user;
+    try {
+        consultants = await loadConsultants();
+    } catch (error) {
+        consultants = [];
     }
     
     // Load clients
@@ -92,11 +101,13 @@ function renderClients() {
         a.company_name.localeCompare(b.company_name)
     );
     
+    const canDelete = isConsultantUser(getCurrentUser());
     clientsGrid.innerHTML = sorted.map(client => {
         const analysesCount = getClientAnalysesCount(client.id);
+        const upcoming = isUpcoming(client.appointment_at);
         
         return `
-            <div class="client-card" onclick="viewClient('${client.id}')">
+            <div class="client-card" onclick="viewClient('${escapeHtml(client.id)}')">
                 <div class="client-card-header">
                     <div class="client-card-title">
                         <h3>
@@ -109,9 +120,18 @@ function renderClients() {
                         </div>
                     </div>
                     <div class="client-card-actions">
-                        <span class="client-status-badge ${client.status}">
-                            ${client.status}
-                        </span>
+                        ${stageBadge(client.stage)}
+                    </div>
+                </div>
+                
+                <div class="client-card-workflow">
+                    <div class="workflow-line ${client.assigned_to ? '' : 'is-empty'}">
+                        <i class="fas fa-user-tie"></i>
+                        ${client.assigned_to ? escapeHtml(client.assigned_to_name || 'Former team member') : 'Not assigned yet'}
+                    </div>
+                    <div class="workflow-line ${client.appointment_at ? (upcoming ? 'is-upcoming' : '') : 'is-empty'}">
+                        <i class="fas fa-calendar-check"></i>
+                        ${client.appointment_at ? escapeHtml(formatDateTime(client.appointment_at)) : 'No appointment'}
                     </div>
                 </div>
                 
@@ -129,7 +149,7 @@ function renderClients() {
                         ` : ''}
                         <div class="client-info-item">
                             <i class="fas fa-industry"></i>
-                            <span>${formatIndustry(client.industry)}</span>
+                            <span>${escapeHtml(formatIndustry(client.industry))}</span>
                         </div>
                         ${client.location ? `
                             <div class="client-info-item">
@@ -147,12 +167,13 @@ function renderClients() {
                         <span>Analyses</span>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn-icon" onclick="event.stopPropagation(); editClient('${client.id}')" title="Edit client">
+                        <button class="btn-icon" onclick="event.stopPropagation(); editClient('${escapeHtml(client.id)}')" title="Edit client">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn-icon" onclick="event.stopPropagation(); deleteClient('${client.id}')" title="Delete client">
+                        ${canDelete ? `
+                        <button class="btn-icon" onclick="event.stopPropagation(); deleteClient('${escapeHtml(client.id)}')" title="Delete client">
                             <i class="fas fa-trash"></i>
-                        </button>
+                        </button>` : ''}
                     </div>
                 </div>
             </div>
@@ -163,6 +184,14 @@ function renderClients() {
 // Setup filters
 function setupFilters() {
     document.getElementById('filterStatus')?.addEventListener('change', applyFilters);
+    document.getElementById('filterStage')?.addEventListener('change', applyFilters);
+    document.getElementById('filterAssigned')?.addEventListener('change', applyFilters);
+    // One entry per active consultant/admin next to the built-in Everyone / Me / Unassigned choices.
+    const assigned = document.getElementById('filterAssigned');
+    if (assigned) {
+        assigned.insertAdjacentHTML('beforeend', consultants.map(m =>
+            `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join(''));
+    }
     document.getElementById('filterIndustry')?.addEventListener('change', applyFilters);
     document.getElementById('searchClients')?.addEventListener('input', applyFilters);
 }
@@ -171,11 +200,18 @@ function setupFilters() {
 function applyFilters() {
     const filterStatus = document.getElementById('filterStatus')?.value || 'all';
     const filterIndustry = document.getElementById('filterIndustry')?.value || 'all';
+    const filterStage = document.getElementById('filterStage')?.value || 'all';
+    const filterAssigned = document.getElementById('filterAssigned')?.value || 'all';
+    const myId = (getCurrentUser() || {}).id;
     const searchTerm = document.getElementById('searchClients')?.value.toLowerCase() || '';
     
     filteredClients = allClients.filter(client => {
         if (filterStatus !== 'all' && client.status !== filterStatus) return false;
         if (filterIndustry !== 'all' && client.industry !== filterIndustry) return false;
+        if (filterStage !== 'all' && client.stage !== filterStage) return false;
+        if (filterAssigned === 'me' && client.assigned_to !== myId) return false;
+        if (filterAssigned === 'none' && client.assigned_to) return false;
+        if (!['all', 'me', 'none'].includes(filterAssigned) && client.assigned_to !== filterAssigned) return false;
         if (searchTerm) {
             const searchableText = `${client.company_name} ${client.contact_name} ${client.email}`.toLowerCase();
             if (!searchableText.includes(searchTerm)) return false;
@@ -211,6 +247,17 @@ function openModal(client = null) {
     
     editingClientId = client ? client.id : null;
     modalTitle.textContent = client ? 'Edit Client' : 'Add New Client';
+
+    // Hand-off fields (stage / consultant / appointment)
+    document.getElementById('stage').innerHTML = stageOptions(client ? client.stage : 'lead');
+    document.getElementById('assignedTo').innerHTML = consultantOptions(
+        consultants,
+        client ? client.assigned_to : '',
+        'Not assigned yet',
+        client && client.assigned_to ? { id: client.assigned_to, name: client.assigned_to_name } : null
+    );
+    document.getElementById('appointmentAt').value = client ? toLocalInputValue(client.appointment_at) : '';
+    document.getElementById('appointmentNotes').value = client ? (client.appointment_notes || '') : '';
     
     if (client) {
         document.getElementById('companyName').value = client.company_name || '';
@@ -224,6 +271,8 @@ function openModal(client = null) {
         document.getElementById('notes').value = client.notes || '';
     } else {
         form.reset();
+        document.getElementById('stage').value = 'lead';
+        document.getElementById('assignedTo').value = '';
     }
     
     modal.style.display = 'flex';
@@ -249,6 +298,7 @@ async function saveClient() {
     const user = getCurrentUser();
     const existingClient = allClients.find(c => c.id === editingClientId);
     
+    // Customer info: anyone on the team can change this.
     const clientData = {
         company_name: document.getElementById('companyName').value,
         contact_name: document.getElementById('contactName').value,
@@ -258,17 +308,38 @@ async function saveClient() {
         company_size: document.getElementById('companySize').value,
         location: document.getElementById('location').value,
         status: document.getElementById('status').value,
-        notes: document.getElementById('notes').value,
-        created_at: existingClient?.created_at,
-        updated_at: new Date().toISOString()
+        notes: document.getElementById('notes').value
     };
     
+    // Pipeline hand-off fields.
+    const workflow = {
+        stage: document.getElementById('stage').value,
+        assignedTo: document.getElementById('assignedTo').value,
+        appointmentAt: fromLocalInputValue(document.getElementById('appointmentAt').value),
+        appointmentNotes: document.getElementById('appointmentNotes').value.trim()
+    };
+    
+    const saveBtn = document.getElementById('saveClientBtn');
+    saveBtn.disabled = true;
     try {
         if (editingClientId) {
             await updateClient(editingClientId, clientData);
+            // Only send what actually changed, so the timeline stays meaningful.
+            const changes = {};
+            if (workflow.stage !== existingClient.stage) changes.stage = workflow.stage;
+            if (workflow.assignedTo !== (existingClient.assigned_to || '')) changes.assignedTo = workflow.assignedTo;
+            const before = existingClient.appointment_at ? new Date(existingClient.appointment_at).toISOString() : null;
+            if (workflow.appointmentAt !== before) changes.appointmentAt = workflow.appointmentAt;
+            if (workflow.appointmentNotes !== (existingClient.appointment_notes || '')) changes.appointmentNotes = workflow.appointmentNotes;
+            if (Object.keys(changes).length) {
+                await apiRequest(`/api/clients/${encodeURIComponent(editingClientId)}/workflow`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(changes)
+                });
+            }
             showNotification('Client updated successfully!', 'success');
         } else {
-            await createClient(clientData);
+            await createClient({ ...clientData, ...workflow });
             showNotification('Client added successfully!', 'success');
         }
         
@@ -276,6 +347,8 @@ async function saveClient() {
         closeModal();
     } catch (error) {
         showNotification(error.message, 'error');
+    } finally {
+        saveBtn.disabled = false;
     }
 }
 

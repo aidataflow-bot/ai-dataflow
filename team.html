@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team - AI DataFlow</title>
+    <link rel="icon" type="image/png" href="images/favicon.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body class="dashboard-page">
+    <nav class="dashboard-nav">
+        <a href="dashboard.html" class="nav-brand" aria-label="AI.DataFlow dashboard">
+            <img src="images/logo-horizontal.png" alt="AI.DataFlow" class="nav-logo">
+        </a>
+        
+        <div class="nav-links">
+            <a href="dashboard.html" class="nav-link">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="recommendations.html" class="nav-link" data-roles="admin,consultant" hidden>
+                <i class="fas fa-lightbulb"></i> New Analysis
+            </a>
+            <a href="clients.html" class="nav-link">
+                <i class="fas fa-users"></i> Clients
+            </a>
+            <a href="history.html" class="nav-link">
+                <i class="fas fa-history"></i> History
+            </a>
+            <a href="team.html" class="nav-link active" data-roles="admin" hidden>
+                <i class="fas fa-user-shield"></i> Team
+            </a>
+        </div>
+        
+        <div class="nav-user">
+            <div class="user-info">
+                <span id="userName">User</span>
+                <span class="role-chip" id="roleChip"></span>
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+    
+    <main class="dashboard-content">
+        <div class="page-header">
+            <div>
+                <h1><i class="fas fa-user-shield"></i> Team</h1>
+                <p class="page-subtitle">Everyone who works in your agency&rsquo;s workspace and what they can do</p>
+            </div>
+        </div>
+
+        <div class="team-note">
+            <strong>Roles.</strong>
+            <b>Sales</b> creates clients, sets appointments, edits customer info and hands clients to a consultant; sees every analysis, price and ROI but cannot change them.
+            <b>Consultant</b> runs and edits analyses and pricing and manages clients.
+            <b>Admin</b> does everything a consultant does, plus this page.<br>
+            <strong>Adding someone.</strong> Give them the agency invite code (the <code>AGENCY_INVITE_CODE</code> value in Vercel). They create their own account at the sign-up page and start as <b>Sales</b>. Come back here to change their role. Deactivating someone locks them out immediately and keeps their history.
+        </div>
+
+        <div class="team-card">
+            <table class="team-table">
+                <thead>
+                    <tr><th>Person</th><th>Role</th><th>Status</th><th>Joined</th></tr>
+                </thead>
+                <tbody id="teamBody">
+                    <tr><td colspan="4" class="timeline-empty">Loading team&hellip;</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="js/auth.js"></script>
+    <script src="js/workspace.js"></script>
+    <script src="js/team.js"></script>
+</body>
+</html>

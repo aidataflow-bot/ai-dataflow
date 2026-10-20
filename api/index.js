@@ -169,7 +169,8 @@ async function loadStaff() {
     name: row.name,
     email: row.email,
     role: roleOf(row),
-    active: row.active !== false
+    active: row.active !== false,
+    createdAt: row.created_at
   }]));
 }
 
@@ -681,7 +682,7 @@ module.exports = async function handler(req, res) {
           name: member.name,
           role: member.role,
           active: member.active,
-          ...(isAdmin ? { email: member.email } : {})
+          ...(isAdmin ? { email: member.email, createdAt: member.createdAt } : {})
         }));
       send(res, 200, { team: members });
       return;

@@ -18,7 +18,7 @@
             <a href="dashboard.html" class="nav-link">
                 <i class="fas fa-home"></i> Dashboard
             </a>
-            <a href="recommendations.html" class="nav-link active">
+            <a href="recommendations.html" class="nav-link active" data-roles="admin,consultant" hidden>
                 <i class="fas fa-lightbulb"></i> New Analysis
             </a>
             <a href="clients.html" class="nav-link">
@@ -27,11 +27,15 @@
             <a href="history.html" class="nav-link">
                 <i class="fas fa-history"></i> History
             </a>
+            <a href="team.html" class="nav-link" data-roles="admin" hidden>
+                <i class="fas fa-user-shield"></i> Team
+            </a>
         </div>
         
         <div class="nav-user">
             <div class="user-info">
                 <span id="userName">User</span>
+                <span class="role-chip" id="roleChip"></span>
                 <i class="fas fa-user-circle"></i>
             </div>
             <button id="logoutBtn" class="btn-logout">

@@ -3,9 +3,17 @@
 const AUTH_TOKEN_KEY = 'aiDataFlowToken';
 const CURRENT_USER_KEY = 'currentUser';
 
+// Pages that need a signed-in staff member refresh the user (role, active) from the server.
+// Page scripts can `await window.userReady` before drawing anything that depends on the role.
+const AUTH_PAGES = ['login.html', 'register.html', ''];
+window.userReady = AUTH_PAGES.includes(window.location.pathname.split('/').pop()) || !localStorage.getItem(AUTH_TOKEN_KEY)
+    ? Promise.resolve(getCurrentUser())
+    : refreshUser();
+
 document.addEventListener('DOMContentLoaded', function() {
     const currentUser = getCurrentUser();
     const currentPage = window.location.pathname.split('/').pop();
+    applyRoleUI(currentUser);
     
     if (currentUser && (currentPage === 'login.html' || currentPage === 'register.html' || currentPage === '')) {
         window.location.href = 'dashboard.html';
@@ -41,6 +49,14 @@ async function apiRequest(path, options = {}) {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+        // An expired session, or an account an admin deactivated: sign out and go to the login page.
+        if (response.status === 401 && token && !String(path).startsWith('/api/auth/')) {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            localStorage.removeItem(CURRENT_USER_KEY);
+            if (!AUTH_PAGES.includes(window.location.pathname.split('/').pop())) {
+                window.location.href = 'login.html';
+            }
+        }
         throw new Error(payload.error || 'Request failed');
     }
 
@@ -143,6 +159,46 @@ function checkAuth() {
     return user;
 }
 
+// ===== Roles =====
+// admin: everything + team management. consultant: analyses, pricing, clients.
+// sales: sees everything, creates clients, sets appointments and hands off; cannot change analyses.
+// The server enforces all of this; the UI only hides what a role cannot use.
+const ROLE_LABELS = { admin: 'Admin', consultant: 'Consultant', sales: 'Sales' };
+
+function userRole(user) {
+    return user && ROLE_LABELS[user.role] ? user.role : 'sales';
+}
+
+function isConsultantUser(user) {
+    const role = userRole(user);
+    return role === 'admin' || role === 'consultant';
+}
+
+async function refreshUser() {
+    try {
+        const { user } = await apiRequest('/api/me');
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+        applyRoleUI(user);
+        return user;
+    } catch (error) {
+        return getCurrentUser();
+    }
+}
+
+// Shows the role chip and hides every [data-roles="admin,consultant"] element the user's role cannot use.
+function applyRoleUI(user) {
+    if (!user) return;
+    const role = userRole(user);
+    document.body.dataset.role = role;
+    document.querySelectorAll('.role-chip').forEach(el => {
+        el.textContent = ROLE_LABELS[role];
+        el.className = `role-chip role-${role}`;
+    });
+    document.querySelectorAll('[data-roles]').forEach(el => {
+        el.hidden = !el.dataset.roles.split(',').map(r => r.trim()).includes(role);
+    });
+}
+
 function extractNameFromEmail(email) {
     const username = email.split('@')[0];
     const parts = username.split(/[._]/);
@@ -177,7 +233,7 @@ function showNotification(message, type = 'info') {
     notification.className = `notification notification-${type}`;
     notification.innerHTML = `
         <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-        <span>${message}</span>
+        <span>${escapeHtml(message)}</span>
     `;
     
     notification.style.cssText = `

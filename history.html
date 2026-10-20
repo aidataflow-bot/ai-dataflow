@@ -18,7 +18,7 @@
             <a href="dashboard.html" class="nav-link">
                 <i class="fas fa-home"></i> Dashboard
             </a>
-            <a href="recommendations.html" class="nav-link">
+            <a href="recommendations.html" class="nav-link" data-roles="admin,consultant" hidden>
                 <i class="fas fa-lightbulb"></i> New Analysis
             </a>
             <a href="clients.html" class="nav-link">
@@ -27,11 +27,15 @@
             <a href="history.html" class="nav-link active">
                 <i class="fas fa-history"></i> History
             </a>
+            <a href="team.html" class="nav-link" data-roles="admin" hidden>
+                <i class="fas fa-user-shield"></i> Team
+            </a>
         </div>
         
         <div class="nav-user">
             <div class="user-info">
                 <span id="userName">User</span>
+                <span class="role-chip" id="roleChip"></span>
                 <i class="fas fa-user-circle"></i>
             </div>
             <button id="logoutBtn" class="btn-logout">
@@ -41,6 +45,10 @@
     </nav>
     
     <main class="dashboard-content">
+        <div class="readonly-banner" data-roles="sales" hidden>
+            <i class="fas fa-eye"></i>
+            <span>View only: you can read every analysis, pricing and ROI and download the PDF. Your consultant changes analyses.</span>
+        </div>
         <div class="page-header">
             <h1><i class="fas fa-history"></i> Recommendation History</h1>
             <p class="page-subtitle">Review your past analyses and track implementation progress</p>
@@ -82,7 +90,7 @@
                 </label>
             </div>
             
-            <button id="clearHistoryBtn" class="btn-danger-outline">
+            <button id="clearHistoryBtn" class="btn-danger-outline" data-roles="admin" hidden>
                 <i class="fas fa-trash"></i> Clear All History
             </button>
         </div>

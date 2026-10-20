@@ -18,7 +18,7 @@
             <a href="dashboard.html" class="nav-link">
                 <i class="fas fa-home"></i> Dashboard
             </a>
-            <a href="recommendations.html" class="nav-link">
+            <a href="recommendations.html" class="nav-link" data-roles="admin,consultant" hidden>
                 <i class="fas fa-lightbulb"></i> New Analysis
             </a>
             <a href="clients.html" class="nav-link active">
@@ -27,11 +27,15 @@
             <a href="history.html" class="nav-link">
                 <i class="fas fa-history"></i> History
             </a>
+            <a href="team.html" class="nav-link" data-roles="admin" hidden>
+                <i class="fas fa-user-shield"></i> Team
+            </a>
         </div>
         
         <div class="nav-user">
             <div class="user-info">
                 <span id="userName">User</span>
+                <span class="role-chip" id="roleChip"></span>
                 <i class="fas fa-user-circle"></i>
             </div>
             <button id="logoutBtn" class="btn-logout">
@@ -44,7 +48,7 @@
         <div class="page-header">
             <div>
                 <h1><i class="fas fa-users"></i> Client Management</h1>
-                <p class="page-subtitle">Manage your clients and view their analyses</p>
+                <p class="page-subtitle">Your agency&rsquo;s shared client list: pipeline stage, appointments and who owns each client</p>
             </div>
             <button id="addClientBtn" class="btn-primary" style="width: auto;">
                 <i class="fas fa-plus-circle"></i> Add New Client
@@ -52,6 +56,33 @@
         </div>
         
         <div class="clients-filters">
+            <div class="filter-group">
+                <label for="filterStage">
+                    <i class="fas fa-stream"></i> Stage:
+                </label>
+                <select id="filterStage">
+                    <option value="all">All Stages</option>
+                    <option value="lead">Lead</option>
+                    <option value="appointment-set">Appointment set</option>
+                    <option value="discovery">Discovery</option>
+                    <option value="analysis">Analysis</option>
+                    <option value="proposal-sent">Proposal sent</option>
+                    <option value="won">Won</option>
+                    <option value="lost">Lost</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filterAssigned">
+                    <i class="fas fa-user-tie"></i> Assigned to:
+                </label>
+                <select id="filterAssigned">
+                    <option value="all">Everyone</option>
+                    <option value="me">Me</option>
+                    <option value="none">Unassigned</option>
+                </select>
+            </div>
+
             <div class="filter-group">
                 <label for="filterStatus">
                     <i class="fas fa-filter"></i> Status:
@@ -199,9 +230,43 @@
                         </div>
                     </div>
                     
+
+                    <div class="form-section-title"><i class="fas fa-handshake"></i> Pipeline &amp; hand-off</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="stage">
+                                <i class="fas fa-stream"></i> Stage
+                            </label>
+                            <select id="stage" name="stage"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="assignedTo">
+                                <i class="fas fa-user-tie"></i> Assigned consultant
+                            </label>
+                            <select id="assignedTo" name="assignedTo"></select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="appointmentAt">
+                                <i class="fas fa-calendar-check"></i> Appointment (your time zone)
+                            </label>
+                            <input type="datetime-local" id="appointmentAt" name="appointmentAt">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="appointmentNotes">
+                                <i class="fas fa-comment-dots"></i> Appointment notes
+                            </label>
+                            <input type="text" id="appointmentNotes" name="appointmentNotes" maxlength="500" placeholder="Zoom link, what they want to cover...">
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="notes">
-                            <i class="fas fa-sticky-note"></i> Notes
+                            <i class="fas fa-sticky-note"></i> Background notes
                         </label>
                         <textarea id="notes" name="notes" rows="4" placeholder="Additional information about this client..."></textarea>
                     </div>
@@ -217,6 +282,7 @@
     </div>
     
     <script src="js/auth.js"></script>
+    <script src="js/workspace.js"></script>
     <script src="js/clients.js"></script>
 </body>
 </html>

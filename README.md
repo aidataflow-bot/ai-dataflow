@@ -30,9 +30,12 @@ supabase/schema.sql
 
 This creates:
 
-- `app_users`
-- `clients`
+- `app_users` (with `role` and `active`)
+- `clients` (with pipeline `stage`, `assigned_to`, appointment date and notes)
 - `recommendations`
+- `client_notes` (notes and activity timeline per client)
+
+**Upgrading an existing database** (one that already has data): run `supabase/migrations/2026-10-20-shared-workspace.sql` instead. It only adds things, can be run more than once, and works with the code that is already deployed. Run it **before** deploying the matching code. Afterwards check the roles with `select email, role, active from public.app_users order by created_at;` (the oldest account becomes the admin; fix it with `update public.app_users set role = 'admin' where email = '...';`).
 
 ## Vercel Environment Variables
 
@@ -61,6 +64,28 @@ Important: `SUPABASE_SERVICE_ROLE_KEY` must only live in Vercel environment vari
 ### Who can sign up
 
 AI DataFlow is for agency staff only. The Create Account page asks for an **agency invite code**, which must match `AGENCY_INVITE_CODE` in Vercel. If that variable is not set, registration is closed and nobody can create an account (existing accounts keep working). Share the code only with people who work at the agency, and change it in Vercel (then redeploy) if someone leaves or the code leaks. Clients do not get logins in this version.
+
+### Roles and the shared workspace
+
+The agency has **one shared workspace**: every staff member sees the same clients, analyses, notes and appointments. Each account has a role, enforced by the API (the screens only hide what a role cannot use):
+
+| | Sales | Consultant | Admin |
+|---|---|---|---|
+| See every client, stage, appointment, note, analysis, price and ROI | yes | yes | yes |
+| Create clients, edit customer info (phone, email, ...) | yes | yes | yes |
+| Set stage, appointment and assign a consultant | yes | yes | yes |
+| Add notes | yes | yes | yes |
+| Download the client PDF | yes | yes | yes |
+| Run, edit or delete analyses and their pricing | no | yes | yes |
+| Delete a client | no | yes | yes |
+| Clear all history, manage the team | no | no | yes |
+
+- New sign-ups start as **Sales**. An admin changes their role (or deactivates them) on the **Team** page. A deactivated person is locked out on their next click even if they are still logged in, and their history stays.
+- Intended flow: Sales creates the client, books the appointment and assigns a consultant; the consultant meets the client, runs the analysis and moves the stage forward; everyone follows progress on the client page and the dashboard.
+- Pipeline stages: Lead, Appointment set, Discovery, Analysis, Proposal sent, Won, Lost. Stage, assignment and appointment changes are written to the client's activity log automatically, with who did it.
+- Appointments are stored as an exact moment and shown in each viewer's own time zone. There is no calendar sync yet.
+- `clients.user_id` and `recommendations.user_id` mean "created by". Users who own records cannot be deleted (deactivate them instead).
+- A user whose role is missing or unknown is treated as Sales (least privilege).
 
 ## Deploy
 
@@ -92,7 +117,8 @@ vercel dev
 ```text
 ai-dataflow/
 ├── api/index.js               # Vercel serverless API backed by Supabase
-├── supabase/schema.sql        # Supabase database schema
+├── supabase/schema.sql        # Supabase database schema (fresh install)
+├── supabase/migrations/       # Upgrade scripts for an existing database
 ├── server.js                  # Local fallback server
 ├── package.json
 ├── vercel.json
@@ -104,12 +130,15 @@ ai-dataflow/
 ├── client-detail.html
 ├── recommendations.html
 ├── history.html
+├── team.html                  # Admin: roles and active/deactivated staff
 ├── css/style.css
 ├── images/
 │   ├── logo.png               # Full logo (source)
 │   ├── logo-horizontal.png    # Transparent lockup used in the nav and PDF
 │   └── logo-mark.png, favicon.png
 └── js/
+    ├── workspace.js           # Pipeline stages, appointments, team helpers
+    ├── team.js                # Team page
     ├── pdf-report.js          # Client-ready PDF report builder
     └── vendor/jspdf.umd.min.js  # jsPDF 4.2.1 (vendored)
 ```
@@ -122,7 +151,7 @@ This is now a real app foundation, not a static demo. Before selling it to many 
 - email verification
 - custom domain
 - database backups
-- role-based access if you add team accounts
+- a client-facing portal (analysis, project progress, payment balance)
 - file upload storage using Supabase Storage
 
 ## Operations Notes
