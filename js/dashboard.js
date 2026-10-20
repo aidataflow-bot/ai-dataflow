@@ -101,7 +101,7 @@ async function loadRecentRecommendations(user) {
                 ${rec.isFavorite ? '<i class="fas fa-star" style="color: #f59e0b; font-size: 24px;"></i>' : ''}
             </div>
             <p class="recommendation-description">
-                ${truncateText(rec.description || 'Analysis of business process optimization opportunities.', 150)}
+                ${escapeHtml(truncateText(rec.description || 'Analysis of business process optimization opportunities.', 150))}
             </p>
             <div class="history-item-footer">
                 <span class="status-badge ${rec.status || 'not-started'}">

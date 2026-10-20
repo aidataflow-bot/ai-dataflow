@@ -279,8 +279,11 @@
                         <button id="saveBtn" class="btn-icon" title="Save to favorites">
                             <i class="fas fa-star"></i>
                         </button>
-                        <button id="exportBtn" class="btn-icon" title="Export results">
+                        <button id="exportBtn" class="btn-icon" title="Export results as CSV">
                             <i class="fas fa-download"></i>
+                        </button>
+                        <button id="pdfBtn" class="btn-secondary" title="Download a client-ready PDF report">
+                            <i class="fas fa-file-pdf"></i> PDF Report
                         </button>
                         <button id="newAnalysisBtn" class="btn-secondary">
                             <i class="fas fa-plus"></i> New Analysis
@@ -288,6 +291,14 @@
                     </div>
                 </div>
                 
+                <div id="resultsClientRow" class="results-client-row">
+                    <label for="resultsClientSelect"><i class="fas fa-user-tie"></i> Client</label>
+                    <select id="resultsClientSelect">
+                        <option value="">No client (general analysis)</option>
+                    </select>
+                    <small>Linked analyses appear on the client's page and in the PDF report. <a href="clients.html">Add a client</a></small>
+                </div>
+
                 <div id="analysisResults">
                     <!-- Results will be dynamically loaded here -->
                 </div>
@@ -304,6 +315,8 @@
     </main>
     
     <script src="js/auth.js"></script>
+    <script src="js/vendor/jspdf.umd.min.js"></script>
+    <script src="js/pdf-report.js"></script>
     <script src="js/recommendations.js"></script>
 </body>
 </html>

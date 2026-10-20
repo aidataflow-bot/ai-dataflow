@@ -119,7 +119,10 @@
             </div>
             <div class="modal-footer">
                 <button id="modalExport" class="btn-secondary">
-                    <i class="fas fa-download"></i> Export
+                    <i class="fas fa-download"></i> CSV
+                </button>
+                <button id="modalPdf" class="btn-secondary">
+                    <i class="fas fa-file-pdf"></i> PDF Report
                 </button>
                 <button id="modalClose" class="btn-primary">Close</button>
             </div>
@@ -127,6 +130,8 @@
     </div>
     
     <script src="js/auth.js"></script>
+    <script src="js/vendor/jspdf.umd.min.js"></script>
+    <script src="js/pdf-report.js"></script>
     <script src="js/history.js"></script>
 </body>
 </html>

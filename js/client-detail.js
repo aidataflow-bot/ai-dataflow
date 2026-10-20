@@ -186,7 +186,7 @@ async function loadClientAnalyses(clientId) {
                     </div>
                     
                     <div class="history-item-body">
-                        <p>${truncateText(rec.description, 200)}</p>
+                        <p>${escapeHtml(truncateText(rec.description, 200))}</p>
                     </div>
                     
                     <div class="history-item-footer">

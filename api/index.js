@@ -2,6 +2,8 @@ const crypto = require('crypto');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'local-development-change-me';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+const ANTHROPIC_MODEL = 'claude-sonnet-5-5';
+const AI_TIMEOUT_MS = 100000;
 
 function send(res, status, payload) {
   res.statusCode = status;
@@ -217,28 +219,158 @@ async function requireUser(req, res) {
   return user;
 }
 
-async function createAiRecommendations(formData) {
-  if (!process.env.OPENAI_API_KEY) {
-    const error = new Error('AI is not configured. Set OPENAI_API_KEY before publishing.');
-    error.status = 503;
+const ANALYSIS_SYSTEM_PROMPT = [
+  'You are a senior process-improvement and AI automation consultant at an AI data agency.',
+  'You write recommendations that a client executive can act on: specific, practical, and honest about uncertainty.',
+  'Base every recommendation on the information provided. Do not invent facts, statistics, or tools the client did not mention.',
+  'Cost and ROI figures are planning estimates; state them as ranges.',
+  'Respond with a single JSON object and nothing else: no markdown, no code fences, no commentary.'
+].join(' ');
+
+function clip(value, max) {
+  return String(value || '').trim().slice(0, max);
+}
+
+function buildAnalysisPrompt(formData, client) {
+  const lines = [
+    'Create 3 to 5 prioritized process-optimization recommendations, most important first.',
+    'Keep each description to 2-3 sentences and give at most 4 concrete actions per recommendation.',
+    'Return JSON in exactly this shape:',
+    '{"summary":{"totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
+    ''
+  ];
+
+  if (client) {
+    lines.push(
+      `Client company: ${clip(client.company_name, 200)}`,
+      `Client industry: ${clip(client.industry, 100)}`,
+      `Client size: ${clip(client.company_size, 100) || 'Not provided'}`,
+      `Client location: ${clip(client.location, 200) || 'Not provided'}`,
+      `Client notes: ${clip(client.notes, 600) || 'None'}`,
+      ''
+    );
+  }
+
+  lines.push(
+    `Focus area: ${clip(formData.processArea, 100)}`,
+    `Process description: ${clip(formData.processDescription, 8000)}`,
+    `Current tools: ${clip(formData.currentTools, 500) || 'Not provided'}`,
+    `Team size: ${clip(formData.teamSize, 100) || 'Not provided'}`,
+    `Timeline: ${clip(formData.urgency, 100) || 'Not provided'}`,
+    `Goals: ${(Array.isArray(formData.goals) ? formData.goals : []).map(goal => clip(goal, 100)).join(', ') || 'Not provided'}`,
+    `Attached file names (contents were not provided): ${(Array.isArray(formData.attachments) ? formData.attachments : []).map(file => clip(file && file.name, 200)).join(', ') || 'None'}`
+  );
+
+  return lines.join('\n');
+}
+
+function aiError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function extractJsonObject(text) {
+  const cleaned = String(text || '').replace(/```(?:json)?/gi, '');
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end <= start) {
+    throw aiError(502, 'The AI returned an unreadable response. Please try again.');
+  }
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw aiError(502, 'The AI returned an unreadable response. Please try again.');
+  }
+}
+
+function normalizeResults(raw) {
+  const list = Array.isArray(raw && raw.recommendations) ? raw.recommendations : [];
+  if (list.length === 0) {
+    throw aiError(502, 'The AI returned no recommendations. Please try again.');
+  }
+
+  const recommendations = list.slice(0, 8).map(item => {
+    const impact = Number(item && item.impactScore);
+    const priority = String((item && item.priority) || '').toLowerCase();
+    return {
+      title: String((item && item.title) || 'Untitled recommendation'),
+      description: String((item && item.description) || ''),
+      priority: ['high', 'medium', 'low'].includes(priority) ? priority : 'medium',
+      impactScore: Number.isFinite(impact) ? Math.min(10, Math.max(0, impact)) : 5,
+      actions: (Array.isArray(item && item.actions) ? item.actions : []).map(String),
+      timeline: String((item && item.timeline) || 'To be determined'),
+      estimatedCost: String((item && item.estimatedCost) || 'To be determined'),
+      expectedRoi: String((item && item.expectedRoi) || 'To be determined')
+    };
+  });
+
+  const average = recommendations.reduce((sum, rec) => sum + rec.impactScore, 0) / recommendations.length;
+  const confidence = Number(raw.summary && raw.summary.confidenceScore);
+
+  return {
+    summary: {
+      totalRecommendations: recommendations.length,
+      estimatedImpact: average.toFixed(1),
+      implementationTime: String((raw.summary && raw.summary.implementationTime) || ''),
+      confidenceScore: Number.isFinite(confidence) ? Math.min(10, Math.max(0, confidence)) : 7
+    },
+    recommendations
+  };
+}
+
+async function callAnthropic(formData, client) {
+  const model = process.env.ANTHROPIC_MODEL || ANTHROPIC_MODEL;
+  let response;
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 16000,
+        system: ANALYSIS_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: buildAnalysisPrompt(formData, client) }]
+      }),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+    });
+  } catch (error) {
+    if (error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw aiError(504, 'The AI took too long to respond. Please try again.');
+    }
     throw error;
   }
 
-  const prompt = [
-    'You are an expert AI data agency consultant.',
-    'Create practical process-optimization recommendations for the client.',
-    'Return strict JSON matching this shape:',
-    '{"summary":{"totalRecommendations":number,"estimatedImpact":"number string 1-10","implementationTime":"string","confidenceScore":number},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
-    '',
-    `Focus area: ${formData.processArea}`,
-    `Process description: ${formData.processDescription}`,
-    `Current tools: ${formData.currentTools || 'Not provided'}`,
-    `Team size: ${formData.teamSize || 'Not provided'}`,
-    `Timeline: ${formData.urgency || 'Not provided'}`,
-    `Goals: ${(formData.goals || []).join(', ') || 'Not provided'}`,
-    `Attachments: ${(formData.attachments || []).map(file => file.name).join(', ') || 'None'}`
-  ].join('\n');
+  if (!response.ok) {
+    const detail = await response.text();
+    console.error('Anthropic request failed', response.status, detail);
+    if (response.status === 401 || response.status === 403) {
+      throw aiError(503, 'The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in Vercel.');
+    }
+    if (response.status === 402 || /credit balance/i.test(detail)) {
+      throw aiError(503, 'The Anthropic account has no credits. Add billing at console.anthropic.com.');
+    }
+    if (response.status === 429 || response.status === 529) {
+      throw aiError(503, 'The AI is busy right now. Please try again in a minute.');
+    }
+    throw aiError(502, 'The AI request failed. Please try again.');
+  }
 
+  const data = await response.json();
+  const text = (data.content || [])
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('');
+
+  return { raw: extractJsonObject(text), provider: 'anthropic', model: data.model || model };
+}
+
+async function callOpenAi(formData, client) {
+  const model = process.env.OPENAI_MODEL || OPENAI_MODEL;
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -246,34 +378,56 @@ async function createAiRecommendations(formData) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || OPENAI_MODEL,
-      input: prompt,
+      model,
+      input: `${ANALYSIS_SYSTEM_PROMPT}\n\n${buildAnalysisPrompt(formData, client)}`,
       text: {
         format: {
           type: 'json_object'
         }
       }
-    })
+    }),
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS)
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    const error = new Error(`AI request failed: ${detail}`);
-    error.status = 502;
-    throw error;
+    console.error('OpenAI request failed', response.status, detail);
+    throw aiError(502, 'The AI request failed. Please try again.');
   }
 
   const data = await response.json();
   const outputText = data.output_text || data.output?.flatMap(item => item.content || [])
     .find(item => item.type === 'output_text')?.text;
 
-  if (!outputText) {
-    const error = new Error('AI response did not include recommendation text');
-    error.status = 502;
-    throw error;
+  return { raw: extractJsonObject(outputText), provider: 'openai', model: data.model || model };
+}
+
+async function createAiRecommendations(formData, client = null) {
+  let generated;
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    generated = await callAnthropic(formData, client);
+  } else if (process.env.OPENAI_API_KEY) {
+    generated = await callOpenAi(formData, client);
+  } else {
+    throw aiError(503, 'AI is not configured. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) in Vercel.');
   }
 
-  return JSON.parse(outputText);
+  return {
+    ...normalizeResults(generated.raw),
+    meta: {
+      provider: generated.provider,
+      model: generated.model,
+      generatedAt: new Date().toISOString()
+    }
+  };
+}
+
+async function getOwnedClient(clientId, userId) {
+  const rows = await supabaseRequest('clients', {
+    query: `?id=eq.${encodeURIComponent(clientId)}&user_id=eq.${encodeURIComponent(userId)}&select=*`
+  });
+  return rows[0] || null;
 }
 
 module.exports = async function handler(req, res) {
@@ -451,6 +605,19 @@ module.exports = async function handler(req, res) {
         if (typeof body.isFavorite === 'boolean') patch.is_favorite = body.isFavorite;
         if (body.status) patch.status = String(body.status);
 
+        if (Object.prototype.hasOwnProperty.call(body, 'clientId')) {
+          if (!body.clientId) {
+            patch.client_id = null;
+          } else {
+            const ownedClient = await getOwnedClient(String(body.clientId), user.id);
+            if (!ownedClient) {
+              sendError(res, 404, 'Client not found');
+              return;
+            }
+            patch.client_id = ownedClient.id;
+          }
+        }
+
         const [updated] = await supabaseRequest('recommendations', {
           method: 'PATCH',
           query: `?id=eq.${encodeURIComponent(existing.id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`,
@@ -475,11 +642,20 @@ module.exports = async function handler(req, res) {
         return;
       }
 
-      const results = await createAiRecommendations(formData);
+      let client = null;
+      if (formData.clientId) {
+        client = await getOwnedClient(String(formData.clientId), user.id);
+        if (!client) {
+          sendError(res, 400, 'The selected client was not found. Refresh the page and try again.');
+          return;
+        }
+      }
+
+      const results = await createAiRecommendations(formData, client);
       const row = {
         id: id('rec'),
         user_id: user.id,
-        client_id: formData.clientId || null,
+        client_id: client ? client.id : null,
         process_area: formData.processArea,
         description: formData.processDescription,
         current_tools: formData.currentTools || '',

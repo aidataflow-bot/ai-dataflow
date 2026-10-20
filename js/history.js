@@ -2,6 +2,12 @@
 
 let allRecommendations = [];
 let filteredRecommendations = [];
+let allClients = [];
+
+function clientNameFor(clientId) {
+    const client = allClients.find(item => item.id === clientId);
+    return client ? client.company_name : '';
+}
 
 document.addEventListener('DOMContentLoaded', async function() {
     // Check authentication
@@ -32,6 +38,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 // Load history
 async function loadHistory(user) {
+    try {
+        const { clients } = await apiRequest('/api/clients');
+        allClients = clients;
+    } catch (error) {
+        allClients = [];
+    }
     allRecommendations = await getRecommendations();
     filteredRecommendations = [...allRecommendations];
     
@@ -76,6 +88,10 @@ function renderHistory() {
                             <i class="fas fa-chart-line"></i>
                             Impact: ${rec.impactScore}/10
                         </span>
+                        <span>
+                            <i class="fas fa-building"></i>
+                            ${clientNameFor(rec.clientId) ? escapeHtml(clientNameFor(rec.clientId)) : '<em>No client</em>'}
+                        </span>
                         <span class="priority-badge ${rec.priority}">
                             ${rec.priority} Priority
                         </span>
@@ -95,9 +111,9 @@ function renderHistory() {
             </div>
             
             <div class="history-item-body">
-                <p>${truncateText(rec.description, 200)}</p>
-                ${rec.currentTools ? `<p style="margin-top: 12px; color: var(--gray-600);"><strong>Tools:</strong> ${rec.currentTools}</p>` : ''}
-                ${rec.teamSize ? `<p style="color: var(--gray-600);"><strong>Team Size:</strong> ${rec.teamSize}</p>` : ''}
+                <p>${escapeHtml(truncateText(rec.description, 200))}</p>
+                ${rec.currentTools ? `<p style="margin-top: 12px; color: var(--gray-600);"><strong>Tools:</strong> ${escapeHtml(rec.currentTools)}</p>` : ''}
+                ${rec.teamSize ? `<p style="color: var(--gray-600);"><strong>Team Size:</strong> ${escapeHtml(rec.teamSize)}</p>` : ''}
             </div>
             
             <div class="history-item-footer">
@@ -274,7 +290,24 @@ function viewDetails(id) {
     
     modalTitle.textContent = formatAreaName(rec.processArea);
     
+    const sortedClients = [...allClients].sort((a, b) => a.company_name.localeCompare(b.company_name));
+    const clientOptions = sortedClients.map(client => `
+        <option value="${escapeHtml(client.id)}" ${client.id === rec.clientId ? 'selected' : ''}>
+            ${escapeHtml(client.company_name)} - ${escapeHtml(client.contact_name)}
+        </option>
+    `).join('');
+
     modalBody.innerHTML = `
+        <div style="margin-bottom: 24px; padding: 12px 16px; background: var(--gray-50, #f9fafb); border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <label for="modalClientSelect" style="font-weight: 600;"><i class="fas fa-user-tie"></i> Client</label>
+            <select id="modalClientSelect" style="padding: 8px 12px; border: 2px solid var(--gray-200, #e5e7eb); border-radius: 6px; font-size: 14px; min-width: 220px;">
+                <option value="">No client (general analysis)</option>
+                ${clientOptions}
+            </select>
+            ${allClients.length === 0 ? '<small>No clients yet. <a href="clients.html">Add one</a> to link this analysis.</small>' : ''}
+            ${rec.results.meta && rec.results.meta.model ? `<small style="margin-left: auto; color: var(--gray-600);"><i class="fas fa-robot"></i> ${escapeHtml(formatModelLabel(rec.results.meta))}</small>` : ''}
+        </div>
+
         <div style="margin-bottom: 24px;">
             <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
                 <span class="priority-badge ${rec.priority}">${rec.priority} Priority</span>
@@ -285,19 +318,19 @@ function viewDetails(id) {
             <div class="history-meta" style="margin-bottom: 16px;">
                 <span><i class="fas fa-calendar"></i> ${formatDate(rec.createdAt)}</span>
                 <span><i class="fas fa-chart-line"></i> Impact: ${rec.impactScore}/10</span>
-                ${rec.teamSize ? `<span><i class="fas fa-users"></i> Team: ${rec.teamSize}</span>` : ''}
+                ${rec.teamSize ? `<span><i class="fas fa-users"></i> Team: ${escapeHtml(rec.teamSize)}</span>` : ''}
             </div>
         </div>
         
         <div style="margin-bottom: 24px;">
             <h3 style="margin-bottom: 12px;"><i class="fas fa-file-alt"></i> Process Description</h3>
-            <p style="color: var(--gray-700); line-height: 1.8;">${rec.description}</p>
+            <p style="color: var(--gray-700); line-height: 1.8;">${escapeHtml(rec.description)}</p>
         </div>
         
         ${rec.currentTools ? `
             <div style="margin-bottom: 24px;">
                 <h3 style="margin-bottom: 12px;"><i class="fas fa-tools"></i> Current Tools</h3>
-                <p style="color: var(--gray-700);">${rec.currentTools}</p>
+                <p style="color: var(--gray-700);">${escapeHtml(rec.currentTools)}</p>
             </div>
         ` : ''}
         
@@ -333,26 +366,20 @@ function viewDetails(id) {
             </div>
             
             <div class="recommendations-list">
-                ${rec.results.recommendations.slice(0, 3).map((r, idx) => `
+                ${rec.results.recommendations.map((r, idx) => `
                     <div class="recommendation-item" style="margin-bottom: 20px;">
                         <h4 style="font-size: 18px; margin-bottom: 12px;">
-                            <span style="color: var(--primary-blue);">${idx + 1}.</span> ${r.title}
+                            <span style="color: var(--primary-red, #E63946);">${idx + 1}.</span> ${escapeHtml(r.title)}
                         </h4>
-                        <p style="color: var(--gray-700); margin-bottom: 12px;">${r.description}</p>
+                        <p style="color: var(--gray-700); margin-bottom: 12px;">${escapeHtml(r.description)}</p>
                         <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--gray-600);">
-                            <span><i class="fas fa-clock"></i> ${r.timeline}</span>
-                            <span><i class="fas fa-dollar-sign"></i> ${r.estimatedCost}</span>
-                            <span><i class="fas fa-chart-line"></i> ROI: ${r.expectedRoi}</span>
+                            <span><i class="fas fa-clock"></i> ${escapeHtml(r.timeline)}</span>
+                            <span><i class="fas fa-dollar-sign"></i> ${escapeHtml(r.estimatedCost)}</span>
+                            <span><i class="fas fa-chart-line"></i> ROI: ${escapeHtml(r.expectedRoi)}</span>
                         </div>
                     </div>
                 `).join('')}
             </div>
-            
-            ${rec.results.recommendations.length > 3 ? `
-                <p style="text-align: center; color: var(--gray-600); font-style: italic;">
-                    + ${rec.results.recommendations.length - 3} more recommendations
-                </p>
-            ` : ''}
         </div>
     `;
     
@@ -365,10 +392,45 @@ function viewDetails(id) {
         if (e.target === modal) modal.style.display = 'none';
     };
     
-    // Setup export button
+    // Setup export buttons
     document.getElementById('modalExport').onclick = () => {
         exportRecommendation(rec);
     };
+    document.getElementById('modalPdf').onclick = () => {
+        downloadPdfFor(rec);
+    };
+
+    // Link / re-link / unlink the analysis to a client
+    const clientSelect = document.getElementById('modalClientSelect');
+    clientSelect.onchange = async () => {
+        const previous = rec.clientId || '';
+        clientSelect.disabled = true;
+        try {
+            const { recommendation } = await apiRequest(`/api/recommendations/${encodeURIComponent(rec.id)}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ clientId: clientSelect.value || null })
+            });
+            rec.clientId = recommendation.clientId;
+            renderHistory();
+            showNotification(rec.clientId ? 'Analysis linked to client' : 'Analysis unlinked from client', 'success');
+        } catch (error) {
+            clientSelect.value = previous;
+            showNotification(error.message, 'error');
+        } finally {
+            clientSelect.disabled = false;
+        }
+    };
+}
+
+function downloadPdfFor(rec) {
+    try {
+        const client = allClients.find(item => item.id === rec.clientId) || null;
+        const user = getCurrentUser();
+        window.AIDataFlowPdf.downloadReportPdf(rec, client, user && user.name);
+        showNotification('PDF report downloaded', 'success');
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
 }
 
 function handleInitialAnalysisView() {

@@ -1736,3 +1736,33 @@ a:hover {
         font-size: 24px;
     }
 }
+
+/* Client picker shown with analysis results */
+.results-client-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 0 0 24px;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+}
+
+.results-client-row label {
+    font-weight: 600;
+}
+
+.results-client-row select {
+    padding: 8px 12px;
+    border: 2px solid var(--gray-200);
+    border-radius: 6px;
+    font-size: 14px;
+    min-width: 240px;
+    background: white;
+}
+
+.results-client-row small {
+    color: var(--gray-500);
+}

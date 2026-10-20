@@ -101,11 +101,11 @@ function renderClients() {
                     <div class="client-card-title">
                         <h3>
                             <i class="fas fa-building"></i>
-                            ${client.company_name}
+                            ${escapeHtml(client.company_name)}
                         </h3>
                         <div class="client-card-subtitle">
                             <i class="fas fa-user"></i>
-                            ${client.contact_name}
+                            ${escapeHtml(client.contact_name)}
                         </div>
                     </div>
                     <div class="client-card-actions">
@@ -119,12 +119,12 @@ function renderClients() {
                     <div class="client-info-grid">
                         <div class="client-info-item">
                             <i class="fas fa-envelope"></i>
-                            <span>${client.email}</span>
+                            <span>${escapeHtml(client.email)}</span>
                         </div>
                         ${client.phone ? `
                             <div class="client-info-item">
                                 <i class="fas fa-phone"></i>
-                                <span>${client.phone}</span>
+                                <span>${escapeHtml(client.phone)}</span>
                             </div>
                         ` : ''}
                         <div class="client-info-item">
@@ -134,7 +134,7 @@ function renderClients() {
                         ${client.location ? `
                             <div class="client-info-item">
                                 <i class="fas fa-map-marker-alt"></i>
-                                <span>${client.location}</span>
+                                <span>${escapeHtml(client.location)}</span>
                             </div>
                         ` : ''}
                     </div>

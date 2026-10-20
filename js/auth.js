@@ -148,6 +148,29 @@ function extractNameFromEmail(email) {
     return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Human-readable name of the AI model that produced an analysis (stored in results.meta).
+function formatModelLabel(meta) {
+    if (!meta || !meta.model) return '';
+    const model = String(meta.model);
+    const labels = {
+        'claude-sonnet-5-5': 'Claude Sonnet 5.5',
+        'claude-opus-5-5': 'Claude Opus 5.5',
+        'claude-fable-5-1': 'Claude Fable 5.1',
+        'claude-haiku-5-5': 'Claude Haiku 5.5'
+    };
+    const key = Object.keys(labels).find(id => model === id || model.startsWith(`${id}-`));
+    return key ? `${labels[key]} (${model})` : model;
+}
+
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
