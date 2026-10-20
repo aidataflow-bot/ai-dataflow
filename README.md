@@ -65,6 +65,8 @@ Important: `SUPABASE_SERVICE_ROLE_KEY` must only live in Vercel environment vari
 
 AI DataFlow is for agency staff only. The Create Account page asks for an **agency invite code**, which must match `AGENCY_INVITE_CODE` in Vercel. If that variable is not set, registration is closed and nobody can create an account (existing accounts keep working). Share the code only with people who work at the agency, and change it in Vercel (then redeploy) if someone leaves or the code leaks. Clients do not get logins in this version.
 
+Sign-up asks for first name, last name, email, password and the invite code. There is no company field (everyone is agency staff; the stored company is the agency name), and the request cannot choose a role: every new account is written as **Sales**. The invite code field is plain text with auto-capitalize and autocorrect off, so it is typed exactly as shared; the code is case-sensitive.
+
 ### Roles and the shared workspace
 
 The agency has **one shared workspace**: every staff member sees the same clients, analyses, notes and appointments. Each account has a role, enforced by the API (the screens only hide what a role cannot use):

@@ -141,6 +141,7 @@ async function supabaseRequest(table, { method = 'GET', query = '', body } = {})
   return payload;
 }
 
+const AGENCY_NAME = 'AI DataFlow';
 const ROLES = ['admin', 'consultant', 'sales'];
 const STAGES = ['lead', 'appointment-set', 'discovery', 'analysis', 'proposal-sent', 'won', 'lost'];
 const STAGE_LABELS = {
@@ -626,11 +627,13 @@ module.exports = async function handler(req, res) {
       }
       const firstName = String(body.firstName || '').trim();
       const lastName = String(body.lastName || '').trim();
-      const company = String(body.company || '').trim();
+      // Everyone who signs up is agency staff, so the sign-up form no longer asks for a company.
+      // The column is NOT NULL in the database, so it is filled with the agency name.
+      const company = String(body.company || '').trim() || AGENCY_NAME;
       const email = String(body.email || '').trim().toLowerCase();
       const password = String(body.password || '');
 
-      if (!firstName || !lastName || !company || !email || password.length < 8) {
+      if (!firstName || !lastName || !email || password.length < 8) {
         sendError(res, 400, 'Please complete all required fields with a password of at least 8 characters');
         return;
       }
@@ -643,8 +646,9 @@ module.exports = async function handler(req, res) {
         return;
       }
 
-      // New accounts start with the least-privileged role (database default: sales);
-      // an admin promotes them from the Team page.
+      // New accounts always start as Sales, written explicitly here so it never depends on a
+      // database default. The request body cannot choose a role. An admin promotes people
+      // from the Team page.
       const row = {
         id: id('user'),
         first_name: firstName,
@@ -652,6 +656,7 @@ module.exports = async function handler(req, res) {
         name: `${firstName} ${lastName}`,
         company,
         email,
+        role: 'sales',
         password_hash: hashPassword(password)
       };
 

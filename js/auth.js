@@ -110,7 +110,6 @@ async function handleRegister(e) {
     
     const firstName = document.getElementById('firstName').value;
     const lastName = document.getElementById('lastName').value;
-    const company = document.getElementById('company').value;
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
@@ -129,7 +128,7 @@ async function handleRegister(e) {
     try {
         const { user, token } = await apiRequest('/api/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ firstName, lastName, company, email, password, inviteCode })
+            body: JSON.stringify({ firstName, lastName, email, password, inviteCode })
         });
 
         setSession(user, token);
@@ -153,7 +152,8 @@ function handleLogout() {
 }
 
 function setSession(user, token) {
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+    // Never save a missing user: JSON.stringify(undefined) is the text "undefined".
+    if (user && typeof user === 'object') localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     localStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
@@ -163,7 +163,15 @@ function getAuthToken() {
 
 function getCurrentUser() {
     const userStr = localStorage.getItem(CURRENT_USER_KEY);
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    try {
+        const parsed = JSON.parse(userStr);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+        // A damaged saved user must not break every page: forget it and let the sign-in page recover.
+        localStorage.removeItem(CURRENT_USER_KEY);
+        return null;
+    }
 }
 
 function checkAuth() {
@@ -196,6 +204,7 @@ function isConsultantUser(user) {
 async function refreshUser() {
     try {
         const { user } = await apiRequest('/api/me');
+        if (!user || typeof user !== 'object') return getCurrentUser();
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
         applyRoleUI(user);
         return user;
