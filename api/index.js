@@ -124,6 +124,30 @@ async function supabaseRequest(table, { method = 'GET', query = '', body } = {})
   return payload;
 }
 
+const ROLES = ['admin', 'consultant', 'sales'];
+const STAGES = ['lead', 'appointment-set', 'discovery', 'analysis', 'proposal-sent', 'won', 'lost'];
+const STAGE_LABELS = {
+  'lead': 'Lead',
+  'appointment-set': 'Appointment set',
+  'discovery': 'Discovery',
+  'analysis': 'Analysis',
+  'proposal-sent': 'Proposal sent',
+  'won': 'Won',
+  'lost': 'Lost'
+};
+
+// A missing or unknown role (for example before the SQL migration has run) is treated as
+// the least-privileged role, never as an admin.
+function roleOf(row) {
+  return ROLES.includes(row && row.role) ? row.role : 'sales';
+}
+
+// Admins and consultants run and manage analyses; sales can read them but not change them.
+function isConsultant(row) {
+  const role = roleOf(row);
+  return role === 'admin' || role === 'consultant';
+}
+
 function rowToUser(row) {
   return {
     id: row.id,
@@ -132,11 +156,25 @@ function rowToUser(row) {
     lastName: row.last_name,
     name: row.name,
     company: row.company,
+    role: roleOf(row),
+    active: row.active !== false,
     createdAt: row.created_at
   };
 }
 
-function rowToClient(row) {
+async function loadStaff() {
+  const rows = await supabaseRequest('app_users', { query: '?select=*' });
+  return new Map(rows.map(row => [row.id, {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: roleOf(row),
+    active: row.active !== false
+  }]));
+}
+
+function rowToClient(row, staff) {
+  const nameOf = userId => (userId && staff && staff.get(userId) ? staff.get(userId).name : '');
   return {
     id: row.id,
     company_name: row.company_name,
@@ -148,6 +186,13 @@ function rowToClient(row) {
     location: row.location || '',
     status: row.status,
     notes: row.notes || '',
+    stage: STAGES.includes(row.stage) ? row.stage : 'lead',
+    assigned_to: row.assigned_to || '',
+    assigned_to_name: nameOf(row.assigned_to),
+    appointment_at: row.appointment_at || null,
+    appointment_notes: row.appointment_notes || '',
+    created_by: row.user_id,
+    created_by_name: nameOf(row.user_id),
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -174,10 +219,10 @@ function rowToRecommendation(row) {
   };
 }
 
-function clientToRow(client, userId, existingId) {
+// Customer-information fields only. Workflow fields (stage, assignment, appointment) go through
+// applyWorkflow so every change is logged, and ownership (user_id) is never overwritten by an edit.
+function clientInfoFromBody(client) {
   return {
-    id: existingId || id('client'),
-    user_id: userId,
     company_name: String(client.company_name || '').trim(),
     contact_name: String(client.contact_name || '').trim(),
     email: String(client.email || '').trim().toLowerCase(),
@@ -197,6 +242,95 @@ function validateClient(row) {
   if (!row.email) return 'Email is required';
   if (!row.industry) return 'Industry is required';
   return null;
+}
+
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+const WORKFLOW_KEYS = ['stage', 'assignedTo', 'appointmentAt', 'appointmentNotes'];
+
+function hasWorkflowFields(body) {
+  return WORKFLOW_KEYS.some(key => Object.prototype.hasOwnProperty.call(body, key));
+}
+
+// Validates stage / assignment / appointment changes and returns the database patch plus
+// the human-readable timeline events. Dates in event text use {{date:ISO}} so each viewer
+// sees them in their own time zone.
+function applyWorkflow(existing, body, staff) {
+  const patch = {};
+  const events = [];
+  const has = key => Object.prototype.hasOwnProperty.call(body, key);
+
+  if (has('stage')) {
+    const stage = String(body.stage || '');
+    if (!STAGES.includes(stage)) throw httpError(400, 'Unknown pipeline stage');
+    const current = STAGES.includes(existing.stage) ? existing.stage : 'lead';
+    if (stage !== current) {
+      patch.stage = stage;
+      events.push(`Stage changed from ${STAGE_LABELS[current]} to ${STAGE_LABELS[stage]}`);
+    }
+  }
+
+  if (has('assignedTo')) {
+    const target = String(body.assignedTo || '');
+    if (!target) {
+      if (existing.assigned_to) {
+        patch.assigned_to = null;
+        events.push('Unassigned');
+      }
+    } else {
+      const person = staff.get(target);
+      if (!person || !person.active || person.role === 'sales') {
+        throw httpError(400, 'Clients can only be assigned to an active consultant or admin');
+      }
+      if (target !== existing.assigned_to) {
+        patch.assigned_to = target;
+        events.push(`Assigned to ${person.name}`);
+      }
+    }
+  }
+
+  if (has('appointmentAt')) {
+    const raw = body.appointmentAt;
+    if (!raw) {
+      if (existing.appointment_at) {
+        patch.appointment_at = null;
+        events.push('Appointment cleared');
+      }
+    } else {
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) throw httpError(400, 'The appointment date is not valid');
+      const iso = date.toISOString();
+      const before = existing.appointment_at ? new Date(existing.appointment_at).toISOString() : null;
+      if (iso !== before) {
+        patch.appointment_at = iso;
+        events.push(`Appointment set for {{date:${iso}}}`);
+      }
+    }
+  }
+
+  if (has('appointmentNotes')) {
+    const notes = clip(body.appointmentNotes, 1000);
+    if (notes !== (existing.appointment_notes || '')) {
+      patch.appointment_notes = notes;
+      if (!events.some(text => text.startsWith('Appointment'))) events.push('Appointment notes updated');
+    }
+  }
+
+  return { patch, events };
+}
+
+async function logClientEvents(clientId, authorId, kind, texts) {
+  for (const text of texts) {
+    await supabaseRequest('client_notes', {
+      method: 'POST',
+      query: '?select=*',
+      body: { id: id('note'), client_id: clientId, author_id: authorId, kind, body: text }
+    });
+  }
 }
 
 async function getUserById(userId) {
@@ -219,6 +353,11 @@ async function requireUser(req, res) {
   const user = await getUserById(userId);
   if (!user) {
     sendError(res, 401, 'Authentication required');
+    return null;
+  }
+
+  if (user.active === false) {
+    sendError(res, 401, 'This account has been deactivated. Ask your agency admin.');
     return null;
   }
 
@@ -433,9 +572,9 @@ async function createAiRecommendations(formData, client = null) {
   };
 }
 
-async function getOwnedClient(clientId, userId) {
+async function getClientById(clientId) {
   const rows = await supabaseRequest('clients', {
-    query: `?id=eq.${encodeURIComponent(clientId)}&user_id=eq.${encodeURIComponent(userId)}&select=*`
+    query: `?id=eq.${encodeURIComponent(clientId)}&select=*`
   });
   return rows[0] || null;
 }
@@ -480,6 +619,8 @@ module.exports = async function handler(req, res) {
         return;
       }
 
+      // New accounts start with the least-privileged role (database default: sales);
+      // an admin promotes them from the Team page.
       const row = {
         id: id('user'),
         first_name: firstName,
@@ -512,6 +653,11 @@ module.exports = async function handler(req, res) {
         return;
       }
 
+      if (user.active === false) {
+        sendError(res, 403, 'This account has been deactivated. Ask your agency admin.');
+        return;
+      }
+
       send(res, 200, { user: rowToUser(user), token: createToken(user.id) });
       return;
     }
@@ -524,86 +670,224 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    if (pathname === '/api/clients' && req.method === 'GET') {
-      const rows = await supabaseRequest('clients', {
-        query: `?user_id=eq.${encodeURIComponent(user.id)}&select=*&order=company_name.asc`
+    // ----- Team (agency staff) -----
+    if (pathname === '/api/team' && req.method === 'GET') {
+      const staff = await loadStaff();
+      const isAdmin = roleOf(user) === 'admin';
+      const members = [...staff.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(member => ({
+          id: member.id,
+          name: member.name,
+          role: member.role,
+          active: member.active,
+          ...(isAdmin ? { email: member.email } : {})
+        }));
+      send(res, 200, { team: members });
+      return;
+    }
+
+    const teamMatch = pathname.match(/^\/api\/team\/([^/]+)$/);
+    if (teamMatch && req.method === 'PATCH') {
+      if (roleOf(user) !== 'admin') {
+        sendError(res, 403, 'Only an admin can manage the team');
+        return;
+      }
+      const memberId = decodeURIComponent(teamMatch[1]);
+      const body = await getBody(req);
+      const staff = await loadStaff();
+      const target = staff.get(memberId);
+      if (!target) {
+        sendError(res, 404, 'Team member not found');
+        return;
+      }
+
+      const patch = {};
+      if (Object.prototype.hasOwnProperty.call(body, 'role')) {
+        if (!ROLES.includes(body.role)) {
+          sendError(res, 400, 'Role must be admin, consultant or sales');
+          return;
+        }
+        patch.role = body.role;
+      }
+      if (typeof body.active === 'boolean') patch.active = body.active;
+      if (Object.keys(patch).length === 0) {
+        sendError(res, 400, 'Nothing to change');
+        return;
+      }
+
+      const nextRole = patch.role || target.role;
+      const nextActive = patch.active === undefined ? target.active : patch.active;
+      const activeAdmins = [...staff.values()].filter(member => member.role === 'admin' && member.active);
+      const losesAdmin = target.role === 'admin' && target.active && (nextRole !== 'admin' || !nextActive);
+      if (losesAdmin && activeAdmins.length <= 1) {
+        sendError(res, 400, 'There must be at least one active admin');
+        return;
+      }
+
+      await supabaseRequest('app_users', {
+        method: 'PATCH',
+        query: `?id=eq.${encodeURIComponent(memberId)}`,
+        body: patch
       });
-      send(res, 200, { clients: rows.map(rowToClient) });
+      const refreshed = await loadStaff();
+      const member = refreshed.get(memberId);
+      send(res, 200, { member: { id: member.id, name: member.name, email: member.email, role: member.role, active: member.active } });
+      return;
+    }
+
+    // ----- Clients (shared across the agency) -----
+    if (pathname === '/api/clients' && req.method === 'GET') {
+      const [rows, staff] = await Promise.all([
+        supabaseRequest('clients', { query: '?select=*&order=company_name.asc' }),
+        loadStaff()
+      ]);
+      send(res, 200, { clients: rows.map(row => rowToClient(row, staff)) });
       return;
     }
 
     if (pathname === '/api/clients' && req.method === 'POST') {
-      const row = clientToRow(await getBody(req), user.id);
+      const body = await getBody(req);
+      const row = { id: id('client'), user_id: user.id, stage: 'lead', ...clientInfoFromBody(body) };
       const validationError = validateClient(row);
       if (validationError) {
         sendError(res, 400, validationError);
         return;
       }
+
+      const staff = await loadStaff();
+      let workflow = { patch: {}, events: [] };
+      if (hasWorkflowFields(body)) {
+        workflow = applyWorkflow({ stage: 'lead' }, body, staff);
+      }
+
       const [created] = await supabaseRequest('clients', {
         method: 'POST',
         query: '?select=*',
-        body: row
+        body: { ...row, ...workflow.patch }
       });
-      send(res, 201, { client: rowToClient(created) });
+      await logClientEvents(created.id, user.id, 'event', ['Client created', ...workflow.events]);
+      send(res, 201, { client: rowToClient(created, staff) });
       return;
     }
 
-    const clientMatch = pathname.match(/^\/api\/clients\/([^/]+)$/);
+    const clientMatch = pathname.match(/^\/api\/clients\/([^/]+)(?:\/(workflow|notes))?$/);
     if (clientMatch) {
       const clientId = decodeURIComponent(clientMatch[1]);
-      const rows = await supabaseRequest('clients', {
-        query: `?id=eq.${encodeURIComponent(clientId)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`
-      });
-      const existing = rows[0];
+      const sub = clientMatch[2] || '';
+      const existing = await getClientById(clientId);
 
       if (!existing) {
         sendError(res, 404, 'Client not found');
         return;
       }
 
-      if (req.method === 'GET') {
-        send(res, 200, { client: rowToClient(existing) });
+      if (sub === 'workflow' && req.method === 'PATCH') {
+        const staff = await loadStaff();
+        const { patch, events } = applyWorkflow(existing, await getBody(req), staff);
+        let saved = existing;
+        if (Object.keys(patch).length > 0) {
+          [saved] = await supabaseRequest('clients', {
+            method: 'PATCH',
+            query: `?id=eq.${encodeURIComponent(existing.id)}&select=*`,
+            body: { ...patch, updated_at: new Date().toISOString() }
+          });
+          await logClientEvents(existing.id, user.id, 'event', events);
+        }
+        send(res, 200, { client: rowToClient(saved, staff) });
         return;
       }
 
-      if (req.method === 'PUT') {
-        const row = clientToRow(await getBody(req), user.id, existing.id);
-        const validationError = validateClient(row);
+      if (sub === 'notes') {
+        if (req.method === 'GET') {
+          const [rows, staff] = await Promise.all([
+            supabaseRequest('client_notes', {
+              query: `?client_id=eq.${encodeURIComponent(existing.id)}&select=*&order=created_at.desc&limit=300`
+            }),
+            loadStaff()
+          ]);
+          send(res, 200, {
+            notes: rows.map(note => ({
+              id: note.id,
+              kind: note.kind,
+              body: note.body,
+              createdAt: note.created_at,
+              authorId: note.author_id,
+              authorName: staff.get(note.author_id) ? staff.get(note.author_id).name : 'Former team member'
+            }))
+          });
+          return;
+        }
+        if (req.method === 'POST') {
+          const text = clip((await getBody(req)).body, 2000);
+          if (!text) {
+            sendError(res, 400, 'Write a note first');
+            return;
+          }
+          const [created] = await supabaseRequest('client_notes', {
+            method: 'POST',
+            query: '?select=*',
+            body: { id: id('note'), client_id: existing.id, author_id: user.id, kind: 'note', body: text }
+          });
+          send(res, 201, {
+            note: { id: created.id, kind: created.kind, body: created.body, createdAt: created.created_at, authorId: user.id, authorName: user.name }
+          });
+          return;
+        }
+      }
+
+      if (!sub && req.method === 'GET') {
+        send(res, 200, { client: rowToClient(existing, await loadStaff()) });
+        return;
+      }
+
+      if (!sub && req.method === 'PUT') {
+        const patch = clientInfoFromBody(await getBody(req));
+        const validationError = validateClient(patch);
         if (validationError) {
           sendError(res, 400, validationError);
           return;
         }
         const [updated] = await supabaseRequest('clients', {
           method: 'PATCH',
-          query: `?id=eq.${encodeURIComponent(existing.id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`,
-          body: row
+          query: `?id=eq.${encodeURIComponent(existing.id)}&select=*`,
+          body: patch
         });
-        send(res, 200, { client: rowToClient(updated) });
+        send(res, 200, { client: rowToClient(updated, await loadStaff()) });
         return;
       }
 
-      if (req.method === 'DELETE') {
+      if (!sub && req.method === 'DELETE') {
+        if (!isConsultant(user)) {
+          sendError(res, 403, 'Only a consultant or admin can delete clients');
+          return;
+        }
         await supabaseRequest('clients', {
           method: 'DELETE',
-          query: `?id=eq.${encodeURIComponent(existing.id)}&user_id=eq.${encodeURIComponent(user.id)}`
+          query: `?id=eq.${encodeURIComponent(existing.id)}`
         });
         send(res, 200, { ok: true });
         return;
       }
     }
 
+    // ----- Analyses (everyone can read; consultants and admins change them) -----
     if (pathname === '/api/recommendations' && req.method === 'GET') {
       const rows = await supabaseRequest('recommendations', {
-        query: `?user_id=eq.${encodeURIComponent(user.id)}&select=*&order=created_at.desc`
+        query: '?select=*&order=created_at.desc'
       });
       send(res, 200, { recommendations: rows.map(rowToRecommendation) });
       return;
     }
 
     if (pathname === '/api/recommendations' && req.method === 'DELETE') {
+      if (roleOf(user) !== 'admin') {
+        sendError(res, 403, 'Only an admin can clear the whole analysis history');
+        return;
+      }
       await supabaseRequest('recommendations', {
         method: 'DELETE',
-        query: `?user_id=eq.${encodeURIComponent(user.id)}`
+        query: '?id=not.is.null'
       });
       send(res, 200, { ok: true });
       return;
@@ -611,9 +895,13 @@ module.exports = async function handler(req, res) {
 
     const recommendationMatch = pathname.match(/^\/api\/recommendations\/([^/]+)$/);
     if (recommendationMatch && ['PATCH', 'DELETE'].includes(req.method)) {
+      if (!isConsultant(user)) {
+        sendError(res, 403, 'Your role can view analyses but not change them');
+        return;
+      }
       const recommendationId = decodeURIComponent(recommendationMatch[1]);
       const rows = await supabaseRequest('recommendations', {
-        query: `?id=eq.${encodeURIComponent(recommendationId)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`
+        query: `?id=eq.${encodeURIComponent(recommendationId)}&select=*`
       });
       const existing = rows[0];
 
@@ -632,18 +920,18 @@ module.exports = async function handler(req, res) {
           if (!body.clientId) {
             patch.client_id = null;
           } else {
-            const ownedClient = await getOwnedClient(String(body.clientId), user.id);
-            if (!ownedClient) {
+            const linkedClient = await getClientById(String(body.clientId));
+            if (!linkedClient) {
               sendError(res, 404, 'Client not found');
               return;
             }
-            patch.client_id = ownedClient.id;
+            patch.client_id = linkedClient.id;
           }
         }
 
         const [updated] = await supabaseRequest('recommendations', {
           method: 'PATCH',
-          query: `?id=eq.${encodeURIComponent(existing.id)}&user_id=eq.${encodeURIComponent(user.id)}&select=*`,
+          query: `?id=eq.${encodeURIComponent(existing.id)}&select=*`,
           body: patch
         });
         send(res, 200, { recommendation: rowToRecommendation(updated) });
@@ -652,13 +940,17 @@ module.exports = async function handler(req, res) {
 
       await supabaseRequest('recommendations', {
         method: 'DELETE',
-        query: `?id=eq.${encodeURIComponent(existing.id)}&user_id=eq.${encodeURIComponent(user.id)}`
+        query: `?id=eq.${encodeURIComponent(existing.id)}`
       });
       send(res, 200, { ok: true });
       return;
     }
 
     if (pathname === '/api/recommendations/analyze' && req.method === 'POST') {
+      if (!isConsultant(user)) {
+        sendError(res, 403, 'Only a consultant or admin can run analyses');
+        return;
+      }
       const formData = await getBody(req);
       if (!formData.processArea || !formData.processDescription) {
         sendError(res, 400, 'Focus area and process description are required');
@@ -667,7 +959,7 @@ module.exports = async function handler(req, res) {
 
       let client = null;
       if (formData.clientId) {
-        client = await getOwnedClient(String(formData.clientId), user.id);
+        client = await getClientById(String(formData.clientId));
         if (!client) {
           sendError(res, 400, 'The selected client was not found. Refresh the page and try again.');
           return;
