@@ -79,6 +79,7 @@ async function handleRegister(e) {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
+    const inviteCode = document.getElementById('inviteCode').value;
     
     if (password !== confirmPassword) {
         showNotification('Passwords do not match!', 'error');
@@ -93,7 +94,7 @@ async function handleRegister(e) {
     try {
         const { user, token } = await apiRequest('/api/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ firstName, lastName, company, email, password })
+            body: JSON.stringify({ firstName, lastName, company, email, password, inviteCode })
         });
 
         setSession(user, token);

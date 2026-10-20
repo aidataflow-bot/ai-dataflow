@@ -48,6 +48,12 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   return `${salt}:${hash}`;
 }
 
+function safeEqual(a, b) {
+  const left = crypto.createHash('sha256').update(String(a)).digest();
+  const right = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(left, right);
+}
+
 function verifyPassword(password, stored) {
   const [salt, hash] = stored.split(':');
   const candidate = hashPassword(password, salt).split(':')[1];
@@ -235,8 +241,9 @@ function buildAnalysisPrompt(formData, client) {
   const lines = [
     'Create 3 to 5 prioritized process-optimization recommendations, most important first.',
     'Keep each description to 2-3 sentences and give at most 4 concrete actions per recommendation.',
+    'executiveSummary is the opening paragraph of a report the client\'s owner will read: 3 to 4 sentences, professional and neutral. Name the company when one is given, restate the challenge in plain business language (never "he", "she" or shorthand copied from the notes), state the most important finding, and say which recommendation to act on first.',
     'Return JSON in exactly this shape:',
-    '{"summary":{"totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
+    '{"summary":{"executiveSummary":"string","totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
     ''
   ];
 
@@ -246,7 +253,7 @@ function buildAnalysisPrompt(formData, client) {
       `Client industry: ${clip(client.industry, 100)}`,
       `Client size: ${clip(client.company_size, 100) || 'Not provided'}`,
       `Client location: ${clip(client.location, 200) || 'Not provided'}`,
-      `Client notes: ${clip(client.notes, 600) || 'None'}`,
+      `Client notes (internal background only; never quote, paraphrase or hint at them in any text): ${clip(client.notes, 600) || 'None'}`,
       ''
     );
   }
@@ -310,6 +317,7 @@ function normalizeResults(raw) {
 
   return {
     summary: {
+      executiveSummary: String((raw.summary && raw.summary.executiveSummary) || raw.executiveSummary || '').trim().slice(0, 1500),
       totalRecommendations: recommendations.length,
       estimatedImpact: average.toFixed(1),
       implementationTime: String((raw.summary && raw.summary.implementationTime) || ''),
@@ -438,6 +446,19 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'POST' && pathname === '/api/auth/register') {
       const body = await getBody(req);
+
+      // Agency staff only: sign-up needs the shared invite code from AGENCY_INVITE_CODE.
+      // With no code configured, registration stays closed (fail closed). The code is
+      // checked before anything else so strangers learn nothing about existing accounts.
+      const expectedInvite = String(process.env.AGENCY_INVITE_CODE || '').trim();
+      if (!expectedInvite) {
+        sendError(res, 403, 'Sign-up is closed. Ask your agency admin for access.');
+        return;
+      }
+      if (!safeEqual(String(body.inviteCode || '').trim(), expectedInvite)) {
+        sendError(res, 403, 'That invite code is not valid. Ask your agency admin for the current code.');
+        return;
+      }
       const firstName = String(body.firstName || '').trim();
       const lastName = String(body.lastName || '').trim();
       const company = String(body.company || '').trim();

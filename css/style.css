@@ -1766,3 +1766,20 @@ a:hover {
 .results-client-row small {
     color: var(--gray-500);
 }
+
+/* ===== Real logo in the app navigation ===== */
+a.nav-brand {
+    text-decoration: none;
+}
+
+.nav-logo {
+    height: 46px;
+    width: auto;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .nav-logo {
+        height: 32px;
+    }
+}

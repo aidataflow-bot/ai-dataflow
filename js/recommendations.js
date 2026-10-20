@@ -781,12 +781,12 @@ function setupResultActions() {
     });
     
     // PDF report button
-    document.getElementById('pdfBtn')?.addEventListener('click', () => {
+    document.getElementById('pdfBtn')?.addEventListener('click', async () => {
         if (!currentRecommendation) return;
         try {
             const client = availableClients.find(item => item.id === currentRecommendation.clientId) || null;
             const user = getCurrentUser();
-            window.AIDataFlowPdf.downloadReportPdf(currentRecommendation, client, user && user.name);
+            await window.AIDataFlowPdf.downloadReportPdf(currentRecommendation, client, user && user.name);
             showNotification('PDF report downloaded', 'success');
         } catch (error) {
             showNotification(error.message, 'error');

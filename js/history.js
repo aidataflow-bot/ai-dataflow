@@ -422,11 +422,11 @@ function viewDetails(id) {
     };
 }
 
-function downloadPdfFor(rec) {
+async function downloadPdfFor(rec) {
     try {
         const client = allClients.find(item => item.id === rec.clientId) || null;
         const user = getCurrentUser();
-        window.AIDataFlowPdf.downloadReportPdf(rec, client, user && user.name);
+        await window.AIDataFlowPdf.downloadReportPdf(rec, client, user && user.name);
         showNotification('PDF report downloaded', 'success');
     } catch (error) {
         showNotification(error.message, 'error');
