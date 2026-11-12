@@ -37,6 +37,8 @@ This creates:
 
 **Upgrading an existing database** (one that already has data): run `supabase/migrations/2026-10-20-shared-workspace.sql` instead. It only adds things, can be run more than once, and works with the code that is already deployed. Run it **before** deploying the matching code. Afterwards check the roles with `select email, role, active from public.app_users order by created_at;` (the oldest account becomes the admin; fix it with `update public.app_users set role = 'admin' where email = '...';`).
 
+Then run `supabase/migrations/2026-11-11-client-discovery.sql` (adds one column, `clients.discovery`). Export CSVs of `clients`, `recommendations` and `client_notes` first: the Free plan has no automatic backups. The code works before and after this migration; until it has run, discovery answers cannot be saved and the page says so.
+
 ## Vercel Environment Variables
 
 Set these in Vercel Project Settings:
@@ -82,6 +84,7 @@ The agency has **one shared workspace**: every staff member sees the same client
 | Add notes | yes | yes | yes |
 | Download the client PDF | yes | yes | yes |
 | Run, edit or delete analyses and their pricing | no | yes | yes |
+| Record discovery answers (see below) | no | yes | yes |
 | Delete a client | no | yes | yes |
 | Clear all history, manage the team, reset a teammate's password | no | no | yes |
 | Change your own password (Account page) | yes | yes | yes |
@@ -92,6 +95,15 @@ The agency has **one shared workspace**: every staff member sees the same client
 - Appointments are stored as an exact moment and shown in each viewer's own time zone. There is no calendar sync yet.
 - `clients.user_id` and `recommendations.user_id` mean "created by". Users who own records cannot be deleted (deactivate them instead).
 - A user whose role is missing or unknown is treated as Sales (least privilege).
+
+### Discovery questionnaire
+
+SOP 001 (Stage 3) has the consultant ask the client a set of questions in the first meeting. They live in `lib/discovery.js`, which is the single source of truth: the API sends them to the client page, and answers for any other question id are refused. Eight sections apply to every client; an industry add-on appears only when the client's **Industry** matches a key in `INDUSTRY_ADDONS` (today only `real-estate`). Questions marked `star` are the ones to ask in the room (the SOP allows about 20 minutes); the rest are for a follow-up.
+
+- Everyone can read the answers on the client page; only a consultant or admin records them (`GET`/`PUT /api/clients/:id/discovery`). Each save is written to the client's activity log.
+- Answers are stored in `clients.discovery` as `{ answers, updated_at, updated_by }`. Answers for questions that no longer apply (for example after the industry changes) are kept but not shown or used.
+- When an analysis is run for a client, the answers are added to the AI prompt, and a copy is saved on the analysis as `results.discovery`. The PDF prints the starred answers as "What we heard in discovery", except the budget, timeline and decision-maker section, which is sales information. Editing the answers later does not change an analysis that already exists.
+- Figures (hours, people, hourly cost, volumes) are typed as free text for now; the ROI calculator planned for Phase 3 will read them.
 
 ### Passwords
 
@@ -130,6 +142,7 @@ vercel dev
 ```text
 ai-dataflow/
 ├── api/index.js               # Vercel serverless API backed by Supabase
+├── lib/discovery.js           # Discovery questions and answer rules (server only)
 ├── supabase/schema.sql        # Supabase database schema (fresh install)
 ├── supabase/migrations/       # Upgrade scripts for an existing database
 ├── server.js                  # Local fallback server

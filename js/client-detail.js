@@ -50,6 +50,7 @@ async function loadClientDetails(user, clientId) {
     renderClientDetails();
     await Promise.all([
         renderPipelinePanel(),
+        loadDiscovery(),
         loadTimeline(),
         loadClientAnalyses(clientId)
     ]);
@@ -304,6 +305,146 @@ async function addNote() {
     } catch (error) {
         showNotification(error.message, 'error');
     } finally {
+        button.disabled = false;
+    }
+}
+
+// ===== Discovery questionnaire (SOP 001, Stage 3) =====
+// The consultant asks these in the first meeting and records the answers; the AI analysis then builds
+// on them. The questions come from the API, so the page never has its own copy. Sales can read the
+// answers but not change them.
+let discoveryView = null;
+
+async function loadDiscovery() {
+    const panel = document.getElementById('discoveryPanel');
+    if (!panel) return;
+    panel.style.display = 'block';
+    try {
+        discoveryView = await apiRequest(`/api/clients/${encodeURIComponent(currentClient.id)}/discovery`);
+    } catch (error) {
+        panel.innerHTML = `
+            <div class="section-header"><h2><i class="fas fa-clipboard-list"></i> Discovery questionnaire</h2></div>
+            <p class="timeline-empty">Could not load the questionnaire: ${escapeHtml(error.message)}</p>`;
+        return;
+    }
+    renderDiscovery();
+}
+
+function discoveryQuestionHtml(question, answer, canEdit) {
+    const star = question.star ? '<span class="discovery-star" title="Ask in the meeting">&#9733;</span> ' : '';
+    const labelText = star + escapeHtml(question.text);
+    const optional = question.star ? '' : ' discovery-q--optional';
+    if (!canEdit) {
+        return `
+            <div class="form-group discovery-q${optional}">
+                <label>${labelText}</label>
+                ${answer
+                    ? `<div class="discovery-answer">${escapeHtml(answer)}</div>`
+                    : '<div class="discovery-answer is-empty">Not answered yet</div>'}
+            </div>`;
+    }
+    const fieldId = `dq-${question.id}`;
+    const control = question.type === 'choice'
+        ? `<select id="${fieldId}" data-question="${escapeHtml(question.id)}">
+               <option value="">Select...</option>
+               ${question.options.map(option => `<option value="${escapeHtml(option)}"${option === answer ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
+           </select>`
+        : `<textarea id="${fieldId}" data-question="${escapeHtml(question.id)}" rows="2" maxlength="2000"
+               placeholder="${escapeHtml(question.hint || '')}">${escapeHtml(answer)}</textarea>`;
+    return `
+        <div class="form-group discovery-q${optional}">
+            <label for="${fieldId}">${labelText}</label>
+            ${control}
+        </div>`;
+}
+
+function renderDiscovery(options = {}) {
+    const panel = document.getElementById('discoveryPanel');
+    const view = discoveryView;
+    const canEdit = view.canEdit;
+    const answers = view.answers || {};
+    const p = view.progress;
+
+    const sectionsHtml = view.sections.map(section => {
+        const answered = section.questions.filter(question => (answers[question.id] || '').trim()).length;
+        const hasStar = section.questions.some(question => question.star);
+        return `
+            <details class="discovery-section${hasStar ? '' : ' discovery-section--nostar'}" open>
+                <summary><span>${escapeHtml(section.title)}</span><span class="discovery-count">${answered} of ${section.questions.length} answered</span></summary>
+                ${section.note ? `<p class="discovery-note">${escapeHtml(section.note)}</p>` : ''}
+                ${section.questions.map(question => discoveryQuestionHtml(question, answers[question.id] || '', canEdit)).join('')}
+            </details>`;
+    }).join('');
+
+    const updated = view.updatedAt
+        ? ` Last updated by ${escapeHtml(view.updatedByName || 'a team member')} ${escapeHtml(timeAgo(view.updatedAt))}.`
+        : '';
+    const empty = !p.answered && !canEdit
+        ? '<p class="discovery-note">No discovery answers yet. A consultant records them in the first meeting.</p>'
+        : '';
+
+    panel.className = 'discovery-panel' + (options.starredOnly ? ' starred-only' : '');
+    panel.innerHTML = `
+        <div class="section-header">
+            <h2><i class="fas fa-clipboard-list"></i> Discovery questionnaire</h2>
+            <label class="discovery-toggle">
+                <input type="checkbox" id="discoveryStarred"${options.starredOnly ? ' checked' : ''}>
+                Starred only (ask in the meeting)
+            </label>
+        </div>
+        <p class="discovery-summary">
+            <strong>&#9733; ${p.starredAnswered} of ${p.starredTotal}</strong> starred questions answered &middot;
+            ${p.answered} of ${p.total} in all.${updated}
+            ${canEdit ? 'The AI analysis uses these answers.' : ''}
+        </p>
+        ${empty}
+        ${sectionsHtml}
+        ${canEdit ? `
+            <div class="discovery-actions">
+                <span class="discovery-status" id="discoveryStatus"></span>
+                <button class="btn-primary" id="saveDiscoveryBtn" style="width: auto;"><i class="fas fa-save"></i> Save answers</button>
+            </div>` : `
+            <p class="timeline-hint"><i class="fas fa-lock"></i> Only a consultant or admin records discovery answers.</p>`}
+    `;
+
+    document.getElementById('discoveryStarred').addEventListener('change', event => {
+        panel.classList.toggle('starred-only', event.target.checked);
+    });
+    if (canEdit) {
+        document.getElementById('saveDiscoveryBtn').addEventListener('click', saveDiscovery);
+        panel.querySelectorAll('[data-question]').forEach(field => {
+            field.addEventListener('input', () => {
+                document.getElementById('discoveryStatus').textContent = 'Unsaved changes';
+            });
+        });
+    }
+}
+
+async function saveDiscovery() {
+    const button = document.getElementById('saveDiscoveryBtn');
+    const status = document.getElementById('discoveryStatus');
+    const changes = {};
+    document.querySelectorAll('#discoveryPanel [data-question]').forEach(field => {
+        const questionId = field.dataset.question;
+        const value = field.value.trim();
+        if (value !== (discoveryView.answers[questionId] || '')) changes[questionId] = value;
+    });
+    if (!Object.keys(changes).length) {
+        status.textContent = 'No changes to save';
+        return;
+    }
+
+    button.disabled = true;
+    try {
+        discoveryView = await apiRequest(`/api/clients/${encodeURIComponent(currentClient.id)}/discovery`, {
+            method: 'PUT',
+            body: JSON.stringify({ answers: changes })
+        });
+        renderDiscovery({ starredOnly: document.getElementById('discoveryStarred').checked });
+        showNotification('Discovery answers saved', 'success');
+        await loadTimeline();
+    } catch (error) {
+        showNotification(error.message, 'error');
         button.disabled = false;
     }
 }

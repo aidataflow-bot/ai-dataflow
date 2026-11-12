@@ -2042,3 +2042,42 @@ a.nav-brand {
 .team-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .account-form .form-group { margin-bottom: 20px; }
 .account-form .form-help { display: block; margin-top: 6px; }
+
+/* ===== Discovery questionnaire ===== */
+.discovery-panel {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow);
+    padding: 28px 32px;
+    margin-bottom: 32px;
+}
+.discovery-panel .section-header { margin-bottom: 8px; flex-wrap: wrap; gap: 8px 16px; }
+.discovery-q label { display: block; }
+.discovery-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--gray-700); cursor: pointer; }
+.discovery-toggle input { width: auto; }
+.discovery-summary { color: var(--gray-600); font-size: 14px; margin: 0 0 18px; }
+.discovery-section { border-top: 1px solid var(--gray-200); padding: 4px 0 8px; }
+.discovery-section > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 12px 0;
+    font-weight: 600;
+    color: var(--gray-900);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+.discovery-section > summary::-webkit-details-marker { display: none; }
+.discovery-count { font-weight: 500; font-size: 13px; color: var(--gray-500); white-space: nowrap; }
+.discovery-note { color: var(--gray-500); font-size: 13px; margin: 0 0 14px; }
+.discovery-q { margin-bottom: 18px; }
+.discovery-star { color: var(--primary-red); }
+.discovery-answer { white-space: pre-wrap; color: var(--gray-800); padding: 2px 0; }
+.discovery-answer.is-empty { color: var(--gray-400); font-style: italic; }
+.discovery-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 20px; }
+.discovery-status { color: var(--gray-500); font-size: 13px; }
+.discovery-panel.starred-only .discovery-q--optional,
+.discovery-panel.starred-only .discovery-section--nostar { display: none; }
+@media (max-width: 768px) {
+    .discovery-panel { padding: 20px; }
+}

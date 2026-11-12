@@ -121,6 +121,32 @@
         return parts.join(' ');
     }
 
+    // The discovery answers an analysis was built from are kept on the analysis (results.discovery).
+    // The report shows the starred ones, grouped by section. Budget, timeline and decision-maker
+    // answers are sales information and stay out of the client's copy.
+    const INTERNAL_DISCOVERY_SECTIONS = ['Budget, timeline and decision-makers'];
+    const MAX_HEARD_ANSWER = 700;
+
+    function discoveryForReport(list) {
+        if (!Array.isArray(list)) return [];
+        const groups = [];
+        list
+            .filter(item => item && item.star && item.answer && !INTERNAL_DISCOVERY_SECTIONS.includes(item.section))
+            .forEach(item => {
+                let group = groups.find(g => g.section === item.section);
+                if (!group) {
+                    group = { section: item.section, items: [] };
+                    groups.push(group);
+                }
+                const answer = String(item.answer);
+                group.items.push({
+                    question: String(item.question || ''),
+                    answer: answer.length > MAX_HEARD_ANSWER ? answer.slice(0, MAX_HEARD_ANSWER).trimEnd() + '...' : answer
+                });
+            });
+        return groups;
+    }
+
     function buildReportPdf(JsPDF, rec, client, preparedBy, assets) {
         const results = rec.results || {};
         const summary = results.summary || {};
@@ -353,6 +379,24 @@
         if (challenge) {
             heading('Business challenge', 40);
             paragraph(challenge, { gap: 12 });
+        }
+
+        // ----- What we heard (the client's own discovery answers, starred questions only) -----
+        const heard = discoveryForReport(results.discovery);
+        if (heard.length) {
+            heading('What we heard in discovery', 50);
+            heard.forEach(group => {
+                ensure(60);
+                setText(8.5, true, RED);
+                doc.text(clean(group.section).toUpperCase(), M, y + 8.5);
+                y += 20;
+                group.items.forEach(item => {
+                    paragraph(item.question, { size: 8.5, bold: true, color: MUTED, gap: 1 });
+                    paragraph(item.answer, { size: 10, gap: 9 });
+                });
+                y += 4;
+            });
+            y += 6;
         }
 
         // ----- Recommendations at a glance -----

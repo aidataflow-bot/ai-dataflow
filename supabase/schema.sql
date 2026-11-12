@@ -32,6 +32,7 @@ create table if not exists public.clients (
   assigned_to text references public.app_users(id) on delete set null,
   appointment_at timestamptz,
   appointment_notes text,
+  discovery jsonb not null default '{}'::jsonb,   -- discovery questionnaire answers (lib/discovery.js)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const discovery = require('../lib/discovery.js');
 
 // Login tokens are signed with this. On Vercel there is no fallback: a missing secret would let anyone
 // forge a token, so the API refuses every request instead (see the check at the top of the handler).
@@ -401,11 +402,24 @@ const ANALYSIS_SYSTEM_PROMPT = [
   'Cost and ROI figures are planning estimates; state them as ranges.',
   'Do not state a percentage, multiple or dollar return unless it follows from numbers in the information provided, and never present a number as a benchmark or an industry statistic. Where the information does not support a figure, describe the benefit in plain words and say what information would firm it up.',
   'Tools the client already uses are already paid for: do not recommend buying, adopting or replacing them unless the information provided says they are failing. Recommend configuring, integrating or automating them instead, and name them where they matter.',
+  'When discovery answers are provided they are what the client told the consultant in the first meeting: treat them as stated facts, use their figures (hours, headcount, hourly cost, volumes, budget, timeline) when estimating cost, time saved and ROI, and say plainly which figure was not given instead of assuming one. If they say client data may not be processed by third-party AI tools, recommend only options that keep data inside the client\'s own systems and say so.',
   'Respond with a single JSON object and nothing else: no markdown, no code fences, no commentary.'
 ].join(' ');
 
 function clip(value, max) {
   return String(value || '').trim().slice(0, max);
+}
+
+// Discovery answers live on the client row as { answers, updated_at, updated_by }. Before the
+// database migration has run the column does not exist, and every client simply has no answers.
+function storedDiscovery(client) {
+  const stored = client && client.discovery;
+  return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+}
+
+function storedDiscoveryAnswers(client) {
+  const answers = storedDiscovery(client).answers;
+  return answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
 }
 
 function buildAnalysisPrompt(formData, client) {
@@ -431,6 +445,24 @@ function buildAnalysisPrompt(formData, client) {
       `Client notes (internal background only; never quote, paraphrase or hint at them in any text): ${clip(client.notes, 600) || 'None'}`,
       ''
     );
+
+    const answered = discovery.answeredList(client.industry, storedDiscoveryAnswers(client));
+    if (answered.length) {
+      lines.push('Discovery answers from the first client meeting (stated by the client; do not quote them word for word in the report):');
+      let currentSection = '';
+      let budget = 6000;
+      for (const item of answered) {
+        if (budget <= 0) break;
+        if (item.section !== currentSection) {
+          currentSection = item.section;
+          lines.push(`[${currentSection}]`);
+        }
+        const line = `Q: ${clip(item.question, 300)} A: ${clip(item.answer, 600)}`;
+        lines.push(line);
+        budget -= line.length;
+      }
+      lines.push('');
+    }
   }
 
   lines.push(
@@ -899,7 +931,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const clientMatch = pathname.match(/^\/api\/clients\/([^/]+)(?:\/(workflow|notes))?$/);
+    const clientMatch = pathname.match(/^\/api\/clients\/([^/]+)(?:\/(workflow|notes|discovery))?$/);
     if (clientMatch) {
       const clientId = decodeURIComponent(clientMatch[1]);
       const sub = clientMatch[2] || '';
@@ -924,6 +956,63 @@ module.exports = async function handler(req, res) {
         }
         send(res, 200, { client: rowToClient(saved, staff) });
         return;
+      }
+
+      // Discovery questionnaire (SOP 001, Stage 3). Everyone on the team can read the answers;
+      // only a consultant or admin records them, because the answers feed the analysis.
+      if (sub === 'discovery') {
+        const staff = await loadStaff();
+        const viewOf = row => {
+          const stored = storedDiscovery(row);
+          const answers = storedDiscoveryAnswers(row);
+          return {
+            industry: row.industry,
+            sections: discovery.publicSections(row.industry),
+            answers,
+            progress: discovery.progress(row.industry, answers),
+            updatedAt: stored.updated_at || null,
+            updatedByName: stored.updated_by ? (staff.get(stored.updated_by) ? staff.get(stored.updated_by).name : 'Former team member') : '',
+            canEdit: isConsultant(user)
+          };
+        };
+
+        if (req.method === 'GET') {
+          send(res, 200, viewOf(existing));
+          return;
+        }
+
+        if (req.method === 'PUT') {
+          if (!isConsultant(user)) {
+            sendError(res, 403, 'Only a consultant or admin can record discovery answers');
+            return;
+          }
+          const body = await getBody(req);
+          const { answers, changed } = discovery.applyAnswerChanges(existing.industry, storedDiscoveryAnswers(existing), body.answers);
+          if (changed === 0) {
+            send(res, 200, viewOf(existing));
+            return;
+          }
+          const now = new Date().toISOString();
+          let saved;
+          try {
+            [saved] = await supabaseRequest('clients', {
+              method: 'PATCH',
+              query: `?id=eq.${encodeURIComponent(existing.id)}&select=*`,
+              body: { discovery: { answers, updated_at: now, updated_by: user.id }, updated_at: now }
+            });
+          } catch (error) {
+            if (/discovery/i.test(error.message || '')) {
+              throw httpError(503, 'Discovery answers cannot be saved yet: the database update has not been run. Ask the admin to run supabase/migrations/2026-11-11-client-discovery.sql.');
+            }
+            throw error;
+          }
+          const progress = discovery.progress(existing.industry, answers);
+          await logClientEvents(existing.id, user.id, 'event', [
+            `Discovery updated (${changed} ${changed === 1 ? 'answer' : 'answers'} changed; ${progress.starredAnswered} of ${progress.starredTotal} starred questions answered)`
+          ]);
+          send(res, 200, viewOf(saved));
+          return;
+        }
       }
 
       if (sub === 'notes') {
@@ -1101,6 +1190,12 @@ module.exports = async function handler(req, res) {
       }
 
       const results = await createAiRecommendations(formData, client);
+      // Keep a copy of the discovery answers this analysis was built from, so the report can show
+      // what the client said and stays consistent even if the answers are edited later.
+      if (client) {
+        const snapshot = discovery.answeredList(client.industry, storedDiscoveryAnswers(client));
+        if (snapshot.length) results.discovery = snapshot;
+      }
       const row = {
         id: id('rec'),
         user_id: user.id,
