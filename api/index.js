@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'local-development-change-me';
+// Login tokens are signed with this. On Vercel there is no fallback: a missing secret would let anyone
+// forge a token, so the API refuses every request instead (see the check at the top of the handler).
+// The throwaway value is only for running the code on a developer machine.
+const ON_VERCEL = Boolean(process.env.VERCEL);
+const SESSION_SECRET = process.env.SESSION_SECRET || (ON_VERCEL ? '' : 'local-development-change-me');
+const DEFAULT_ANALYSIS_DAILY_LIMIT = 25;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 const AI_TIMEOUT_MS = 100000;
@@ -597,6 +602,23 @@ async function createAiRecommendations(formData, client = null) {
   };
 }
 
+// Cost guard: each person can run a limited number of analyses in any rolling 24 hours
+// (ANALYSIS_DAILY_LIMIT in Vercel, default 25). It counts saved analyses, so deleting one frees a slot;
+// that is fine for a staff-only tool, where the aim is to stop a loop or a runaway script, not a colleague.
+function analysisDailyLimit() {
+  const configured = parseInt(process.env.ANALYSIS_DAILY_LIMIT, 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ANALYSIS_DAILY_LIMIT;
+}
+
+async function analysisLimitReached(userId) {
+  const limit = analysisDailyLimit();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const rows = await supabaseRequest('recommendations', {
+    query: `?user_id=eq.${encodeURIComponent(userId)}&created_at=gte.${encodeURIComponent(since)}&select=id&limit=${limit}`
+  });
+  return { reached: rows.length >= limit, limit };
+}
+
 async function getClientById(clientId) {
   const rows = await supabaseRequest('clients', {
     query: `?id=eq.${encodeURIComponent(clientId)}&select=*`
@@ -608,6 +630,12 @@ module.exports = async function handler(req, res) {
   const url = new URL(req.url, `https://${req.headers.host || 'localhost'}`);
   const rewrittenPath = url.searchParams.get('path');
   const pathname = rewrittenPath ? `/api/${rewrittenPath}` : url.pathname;
+
+  if (!SESSION_SECRET) {
+    console.error('SESSION_SECRET is not set; refusing all requests.');
+    sendError(res, 500, 'The server is not configured correctly (missing SESSION_SECRET). Ask the admin to set it in Vercel and redeploy.');
+    return;
+  }
 
   try {
     if (req.method === 'POST' && pathname === '/api/auth/register') {
@@ -1049,6 +1077,12 @@ module.exports = async function handler(req, res) {
       const formData = await getBody(req);
       if (!formData.processArea || !formData.processDescription) {
         sendError(res, 400, 'Focus area and process description are required');
+        return;
+      }
+
+      const { reached, limit } = await analysisLimitReached(user.id);
+      if (reached) {
+        sendError(res, 429, `Daily analysis limit reached (${limit} in the last 24 hours). Try again later, or ask an admin to raise the limit.`);
         return;
       }
 
