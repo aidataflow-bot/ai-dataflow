@@ -29,6 +29,7 @@
     };
     const GOALS = {
         'reduce-costs': 'Reduce Costs',
+        'increase-revenue': 'Increase Revenue',
         'improve-efficiency': 'Improve Efficiency',
         'enhance-quality': 'Enhance Quality',
         'scale-operations': 'Scale Operations',
