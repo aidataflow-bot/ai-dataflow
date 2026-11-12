@@ -241,10 +241,33 @@
             doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
             doc.setLineWidth(0.75);
             doc.roundedRect(x, y, tileW, tileH, 6, 6, 'FD');
-            setText(19, true, RED);
-            doc.text(clean(tile.value), x + 14, y + 29);
+
+            // The value can be any text the AI wrote (for example "3 to 6 months, in phases"), so shrink it
+            // to fit the tile, and wrap onto two lines only if it is still too wide at the smallest size.
+            const valueText = clean(tile.value);
+            const maxValueW = tileW - 28;
+            let valueSize = 19;
+            setText(valueSize, true, RED);
+            while (valueSize > 11 && doc.getTextWidth(valueText) > maxValueW) {
+                valueSize -= 0.5;
+                setText(valueSize, true, RED);
+            }
+            const allValueLines = doc.splitTextToSize(valueText, maxValueW);
+            const valueLines = allValueLines.slice(0, 2);
+            if (allValueLines.length > 2) {
+                // Still too long after wrapping: end the second line with "..." so it is clearly shortened.
+                let last = valueLines[1];
+                while (last.length > 1 && doc.getTextWidth(last + '...') > maxValueW) last = last.slice(0, -1).trimEnd();
+                valueLines[1] = last + '...';
+            }
+            if (valueLines.length > 1) {
+                doc.text(valueLines[0], x + 14, y + 23);
+                doc.text(valueLines[1], x + 14, y + 35);
+            } else {
+                doc.text(valueLines[0] || '', x + 14, y + 29);
+            }
             setText(8.5, false, MUTED);
-            doc.text(clean(tile.label), x + 14, y + 46);
+            doc.text(clean(tile.label), x + 14, valueLines.length > 1 ? y + 51 : y + 46);
         });
         y += tileH + 24;
 
@@ -540,7 +563,10 @@
         }
         const logo = await loadLogo();
         const doc = buildReportPdf(JsPDF, rec, client, preparedBy, { logo });
-        const date = new Date().toISOString().split('T')[0];
+        // Local date, to match the date printed in the report header (toISOString is UTC and is already
+        // "tomorrow" in the evening in the US).
+        const now = new Date();
+        const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
         doc.save(`AI-DataFlow-Report-${slug(client ? client.company_name : 'General')}-${date}.pdf`);
     }
 

@@ -399,6 +399,8 @@ const ANALYSIS_SYSTEM_PROMPT = [
   'You write recommendations that a client executive can act on: specific, practical, and honest about uncertainty.',
   'Base every recommendation on the information provided. Do not invent facts, statistics, or tools the client did not mention.',
   'Cost and ROI figures are planning estimates; state them as ranges.',
+  'Do not state a percentage, multiple or dollar return unless it follows from numbers in the information provided, and never present a number as a benchmark or an industry statistic. Where the information does not support a figure, describe the benefit in plain words and say what information would firm it up.',
+  'Tools the client already uses are already paid for: do not recommend buying, adopting or replacing them unless the information provided says they are failing. Recommend configuring, integrating or automating them instead, and name them where they matter.',
   'Respond with a single JSON object and nothing else: no markdown, no code fences, no commentary.'
 ].join(' ');
 
@@ -412,6 +414,9 @@ function buildAnalysisPrompt(formData, client) {
     'Keep each description to 2-3 sentences and give at most 4 concrete actions per recommendation.',
     'challengeSummary restates the process description for the client report in 1 to 3 sentences of clear, grammatically correct business English, in the third person about the client company (use "the client" if no company is given). Keep the original meaning and intent but do not copy the wording. The description was typed quickly, so fix grammar, missing words and slips; when a phrase contradicts the rest of the text or looks like a missing word (for example "why listings are moving" in a text about a sales problem), choose the most plausible business meaning. Do not add facts, numbers or tools that were not provided, and never mention that it was rewritten.',
     'executiveSummary is the opening paragraph of a report the client\'s owner will read: 3 to 4 sentences, professional and neutral. Name the company when one is given, restate the challenge in plain business language (never "he", "she" or shorthand copied from the notes), state the most important finding, and say which recommendation to act on first.',
+    'estimatedCost is a range for software and setup cost and says whether it is one-time or monthly. expectedRoi is one short sentence: give a range only when the information provided supports it and say what it assumes (for example "about 5 agent hours a week, if follow-up is the bottleneck"); otherwise describe the benefit in plain words and say what is needed to quantify it (for example "Saves agent time on follow-up; needs discovery data to quantify"). Never invent a percentage.',
+    'implementationTime is the overall timeline as a short range such as "3-6 months", no more than 4 words.',
+    'The current tools listed below are already in use at the client. Build on them rather than proposing replacements.',
     'Return JSON in exactly this shape:',
     '{"summary":{"executiveSummary":"string","challengeSummary":"string","totalRecommendations":number,"estimatedImpact":"average impact score as a string, 1-10","implementationTime":"string","confidenceScore":number from 1-10 reflecting how well the provided information supports the advice},"recommendations":[{"title":"string","description":"string","priority":"high|medium|low","impactScore":number from 1-10,"actions":["string"],"timeline":"string","estimatedCost":"string","expectedRoi":"string"}]}',
     ''

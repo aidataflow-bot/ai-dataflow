@@ -536,11 +536,13 @@ function formatAreaName(area) {
 
 function formatDate(dateString) {
     const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
+    if (isNaN(date.getTime())) return '';
+    // Count calendar days in the viewer's own time zone, so something made this afternoon says
+    // "Today" and something made yesterday evening says "Yesterday" (not "Yesterday" for anything under 24 hours).
+    const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
         return 'Today';
     } else if (diffDays === 1) {
         return 'Yesterday';
